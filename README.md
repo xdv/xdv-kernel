@@ -4,116 +4,145 @@ A Cross-Domain Virtualizer operating system kernel for x86-64, written entirely 
 
 ## Overview
 
-XDV v0.2 is a revolutionary multi-domain operating system kernel that supports three computational domains:
+XDV v0.2 is a multi-domain operating system kernel that supports three computational domains:
 
-- **K-Domain (Classical)**: Traditional von Neumann computing on x64
-- **Q-Domain (Quantum)**: Quantum computing simulation and management
-- **Φ-Domain (Phase-Native)**: Phase-based computation for novel computing paradigms
+- **K-Domain (Classical)**: Traditional von Neumann computing on x64 (FULL SUPPORT)
+- **Q-Domain (Quantum)**: Quantum computing simulation (TYPE STUBS - returns ERR_DOMAIN_NOT_AVAILABLE)
+- **Φ-Domain (Phase-Native)**: Phase-based computation (TYPE STUBS - returns ERR_DOMAIN_NOT_AVAILABLE)
 
-XDV demonstrates the power of Dust for systems programming by implementing a complete kernel with:
+The kernel runs on classical x86-64 hardware with full K-Domain functionality.
 
-- **Cross-Domain Scheduler**: Unified scheduling across K, Q, and Φ domains
-- **Unified Memory Fabric**: Domain-aware memory management with quantum and phase-state support
-- **Secure Domain Boundary Manager**: Capability-based security across domains
-- **Hypervisor**: Virtual machine management for all three domain types
-- **Full Memory Management**: Physical and virtual memory with domain-specific protections
+## Dependencies
 
-## Design Principles
-
-### Constraint-First
-All operations respect DPL's constraint model. The kernel never performs undefined operations.
-
-### Determinism
-Kernel subsystems are deterministic wherever possible. Concurrency primitives use seeded schedulers to allow reproducible execution.
-
-### Safety
-Relies on Dust's type system and effects to prevent memory corruption, race conditions, and undefined behavior.
-
-### Cross-Domain Security
-The Secure Domain Boundary Manager (SDBM) enforces strict isolation between K, Q, and Φ domains using capability-based security.
+- **dustlib**: Core types (Result, Option, Str)
+- **dustlib_k**: Memory allocation, threading, I/O operations
 
 ## Kernel Sectors
 
 The kernel is organized into 13 sectors:
 
-| Sector | Purpose |
-|--------|---------|
-| `xdv_boot` | Boot and early initialization |
-| `xdv_memory` | Physical and virtual memory management |
-| `xdv_cpu` | CPU management, interrupts, exceptions |
-| `xdv_drivers` | Device drivers (VGA, keyboard, storage, network) |
-| `xdv_kernel` | Core kernel functionality and main loop |
-| `xdv_dal` | Domain Abstraction Layer - unified domain interfaces |
-| `xdv_qdomain` | Quantum domain subsystem |
-| `xdv_phidomain` | Phase-Native domain subsystem |
-| `xdv_cds` | Cross-Domain Scheduler |
-| `xdv_umf` | Unified Memory Fabric |
-| `xdv_hypervisor` | Domain Hypervisor |
-| `xdv_sdbm` | Secure Domain Boundary Manager |
-| `xdv_odt` | Observability & Deterministic Trace Layer |
+| Sector | Purpose | Status |
+|--------|---------|--------|
+| `xdv_boot` | Boot and early initialization | ✅ |
+| `xdv_memory` | Physical and virtual memory management | ✅ |
+| `xdv_cpu` | CPU management, interrupts, exceptions | ✅ |
+| `xdv_drivers` | Device drivers (VGA, keyboard, storage, network) | ✅ |
+| `xdv_kernel` | Core kernel functionality and main loop | ✅ |
+| `xdv_dal` | Domain Abstraction Layer - unified domain interfaces | ✅ |
+| `xdv_qdomain` | Quantum domain subsystem (stubbed) | ✅ |
+| `xdv_phidomain` | Phase-Native domain subsystem (stubbed) | ✅ |
+| `xdv_cds` | Cross-Domain Scheduler | ✅ |
+| `xdv_umf` | Unified Memory Fabric | ✅ |
+| `xdv_hypervisor` | Domain Hypervisor | ✅ |
+| `xdv_sdbm` | Secure Domain Boundary Manager | ✅ |
+| `xdv_odt` | Observability & Deterministic Trace Layer | ✅ |
 
-## Building
-
-### Prerequisites
-
-- DPL v0.2 compiler (dust)
-- QEMU (for testing)
-- x86-64 assembly toolchain
-
-### Build Commands
-
-```bash
-# Build the kernel
-dust build
-
-# Run in QEMU
-dust run
-
-# Check syntax
-dust check
-```
-
-## Architecture
+## Directory Structure
 
 ```
-XDV Kernel v0.2
-├── xdv_boot/           # Boot sector - Multiboot2, GDT, IDT, paging
-├── xdv_memory/         # Memory management - Buddy allocator, page tables
-├── xdv_cpu/            # CPU management - Interrupts, exceptions, timer
-├── xdv_drivers/        # Device drivers - VGA, keyboard, storage, network
-├── xdv_kernel/         # Core kernel - Initialization, main loop
-├── xdv_dal/            # Domain Abstraction Layer
-├── xdv_qdomain/        # Quantum domain - Qubits, gates, coherence
-├── xdv_phidomain/      # Phase-Native domain - Phase states, transforms
-├── xdv_cds/            # Cross-Domain Scheduler - Unified scheduling
-├── xdv_umf/            # Unified Memory Fabric - Domain-aware memory
-├── xdv_hypervisor/     # Hypervisor - VM management
-├── xdv_sdbm/           # Secure Domain Boundary - Capabilities
-└── xdv_odt/            # Observability - Telemetry, tracing
+xdv-kernel/
+├── State.toml
+├── README.md
+├── LICENSE
+├── sector/
+│   ├── xdv_boot/           # Boot sector
+│   │   ├── boot.ds
+│   │   └── boot_tests.ds
+│   ├── xdv_memory/        # Memory management
+│   │   ├── memory.ds
+│   │   └── memory_tests.ds
+│   ├── xdv_cpu/          # CPU management
+│   │   ├── cpu.ds
+│   │   └── cpu_tests.ds
+│   ├── xdv_drivers/     # Device drivers
+│   │   ├── drivers.ds
+│   │   └── drivers_tests.ds
+│   ├── xdv_kernel/      # Core kernel
+│   │   ├── kernel.ds
+│   │   └── kernel_tests.ds
+│   ├── xdv_dal/         # Domain Abstraction Layer
+│   │   ├── dal.ds
+│   │   └── dal_tests.ds
+│   ├── xdv_qdomain/     # Quantum domain (stubbed)
+│   │   ├── qdomain.ds
+│   │   └── qdomain_tests.ds
+│   ├── xdv_phidomain/   # Phase-native domain (stubbed)
+│   │   ├── phidomain.ds
+│   │   └── phidomain_tests.ds
+│   ├── xdv_cds/         # Cross-Domain Scheduler
+│   │   ├── cds.ds
+│   │   └── cds_tests.ds
+│   ├── xdv_umf/         # Unified Memory Fabric
+│   │   ├── umf.ds
+│   │   └── umf_tests.ds
+│   ├── xdv_hypervisor/  # Domain Hypervisor
+│   │   ├── hypervisor.ds
+│   │   └── hypervisor_tests.ds
+│   ├── xdv_sdbm/        # Secure Domain Boundary Manager
+│   │   ├── sdbm.ds
+│   │   └── sdbm_tests.ds
+│   └── xdv_odt/         # Observability & Trace
+│       ├── odt.ds
+│       └── odt_tests.ds
 ```
 
 ## Domain Support
 
-### K-Domain (Classical)
+### K-Domain (Classical) - FULL
 Traditional computing on x86-64 architecture with full kernel support:
 - Process scheduling and management
 - Virtual memory with page tables
 - Device I/O
 - System calls
 
-### Q-Domain (Quantum)
-Quantum computing simulation and management:
-- Quantum register allocation
-- Gate operations (Hadamard, CNOT, Pauli, etc.)
-- Coherence window management
-- Measurement operations
+### Q-Domain (Quantum) - STUBBED
+Type definitions present but operations return ERR_DOMAIN_NOT_AVAILABLE (100)
+- Check availability: `q_available()` returns 0
 
-### Φ-Domain (Phase-Native)
-Phase-based computation subsystem:
-- Phase state allocation
-- Phase transforms (Shift, Interference, Amplitude)
-- Coherence window management
-- Phase validation
+### Φ-Domain (Phase-Native) - STUBBED
+Type definitions present but operations return ERR_DOMAIN_NOT_AVAILABLE (100)
+- Check availability: `phi_available()` returns 0
+
+## Building
+
+```bash
+# Check all kernel sectors
+dust check sector/xdv_boot/src
+dust check sector/xdv_memory/src
+dust check sector/xdv_cpu/src
+dust check sector/xdv_drivers/src
+dust check sector/xdv_kernel/src
+dust check sector/xdv_dal/src
+dust check sector/xdv_qdomain/src
+dust check sector/xdv_phidomain/src
+dust check sector/xdv_cds/src
+dust check sector/xdv_umf/src
+dust check sector/xdv_hypervisor/src
+dust check sector/xdv_sdbm/src
+dust check sector/xdv_odt/src
+```
+
+## CI/CD
+
+The kernel uses GitHub Actions for continuous integration:
+
+```yaml
+# .github/workflows/ci.yml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone dust compiler
+        run: git clone --depth 1 https://github.com/dustlang/dust.git ../dust
+      - name: Build Dust compiler
+        run: cd ../dust && cargo build --workspace
+      - name: Check all kernel sectors
+        run: |
+          for sector in xdv_boot xdv_memory xdv_cpu xdv_drivers xdv_kernel xdv_dal xdv_qdomain xdv_phidomain xdv_cds xdv_umf xdv_hypervisor xdv_sdbm xdv_odt; do
+            dust check "sector/$sector/src"
+          done
+```
 
 ## Features
 
@@ -121,52 +150,31 @@ Phase-based computation subsystem:
 - Physical memory allocator (buddy system)
 - Virtual memory with page tables
 - Domain-specific memory protections
-- Unified Memory Fabric for cross-domain memory operations
-- Quantum state memory protection
-- Phase coherence memory management
+- Unified Memory Fabric
 
 ### Cross-Domain Scheduling
 - Unified scheduler for K, Q, and Φ domains
 - Priority-based and round-robin scheduling
-- Coherence-aware quantum job scheduling
-- Real-time phase window scheduling
+- Coherence-aware scheduling
 
 ### Security
 - Capability-based access control
 - Domain isolation enforcement
 - Cross-domain message validation
-- Nonce generation for security
 
 ### Observability
 - Domain-specific telemetry collection
-- Quantum diagnostics (fidelity, decoherence events)
-- Phase diagnostics (coherence events)
 - System health monitoring
 - Deterministic tracing
 
-## Testing
+## Related Components
 
-```bash
-# Check all kernel files compile
-dust check sector/*/src/*.ds
-
-# Boot test in QEMU
-qemu-system-x86_64 -kernel build/xdv.bin
-```
+- [xdv-boot](../xdv-boot) - Bootloader
+- [xdv-xdvfs](../xdv-xdvfs) - Native file system
 
 ## Documentation
 
 - [Specification](./spec/XDV-Kernel-v0.2-Specification.md) - Full kernel specification
-- [Changelog](./CHANGELOG.md) - Version history
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-
-1. Determinism is preserved where possible
-2. Safety properties are maintained
-3. Domain separation is respected
-4. Tests pass before submitting
 
 ## License
 
