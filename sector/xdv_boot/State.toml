@@ -1,0 +1,9 @@
+# XDV Kernel Sector Manifest
+# Each sector has its own State.toml
+
+[sector]
+name = "xdv_boot"
+version = "0.2.0"
+description = "XDV Kernel boot and early initialization"
+
+[dependencies]

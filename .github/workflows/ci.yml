@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone dust compiler
+        run: |
+          # Clone dust compiler to sibling directory
+          git clone --depth 1 https://github.com/dustlang/dust.git ../dust
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          working-directory: ../dust
+
+      - name: Build Dust compiler
+        run: |
+          cd ../dust
+          cargo build --workspace
+
+      - name: Build XDV kernel
+        run: |
+          export PATH="$PWD/../dust/target/debug:$PATH"
+          dust build
+
+      - name: Test XDV kernel
+        run: |
+          export PATH="$PWD/../dust/target/debug:$PATH"
+          dust test

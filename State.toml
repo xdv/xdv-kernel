@@ -1,0 +1,31 @@
+# XDV Kernel Workspace Manifest
+# The XDV Kernel - A Dust Programming Language operating system kernel
+
+[workspace]
+name = "xdv"
+version = "0.2.0"
+description = "XDV Kernel - A Dust Programming Language operating system for x64"
+
+[[sector]]
+name = "xdv_boot"
+path = "sector/xdv_boot"
+
+[[sector]]
+name = "xdv_memory"
+path = "sector/xdv_memory"
+
+[[sector]]
+name = "xdv_cpu"
+path = "sector/xdv_cpu"
+
+[[sector]]
+name = "xdv_drivers"
+path = "sector/xdv_drivers"
+
+[[sector]]
+name = "xdv_kernel"
+path = "sector/xdv_kernel"
+
+[target.x64-pc-none]
+linker = "ld"
+linker_flags = ["-nostdlib", "-static"]

@@ -1,0 +1,12 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_kernel"
+version = "0.2.0"
+description = "XDV Kernel core functionality"
+
+[dependencies]
+xdv_boot = { path = "../xdv_boot" }
+xdv_memory = { path = "../xdv_memory" }
+xdv_cpu = { path = "../xdv_cpu" }
+xdv_drivers = { path = "../xdv_drivers" }

@@ -1,0 +1,179 @@
+// XDV Kernel - CPU Management Sector
+// CPU initialization, interrupt handling, and scheduling
+//
+// This module provides:
+// - GDT and IDT setup
+// - Interrupt handling
+// - Timer management
+// - CPU-local storage
+
+module xdv_cpu;
+
+// GDT entry structure
+K GDTEntry = K[Struct {
+    limit_low: K[UInt16],
+    base_low: K[UInt16],
+    base_middle: K[UInt8],
+    access: K[UInt8],
+    granularity: K[UInt8],
+    base_high: K[UInt8]
+}];
+
+// IDT entry structure  
+K IDTEntry = K[Struct {
+    offset_low: K[UInt16],
+    selector: K[UInt16],
+    ist: K[UInt3],
+    zero: K[UInt5],
+    type_attr: K[UInt8],
+    offset_middle: K[UInt16],
+    offset_high: K[UInt32],
+    reserved: K[UInt32]
+}];
+
+// Interrupt frame pushed by CPU
+K InterruptFrame = K[Struct {
+    rax: K[UInt64],
+    rbx: K[UInt64],
+    rcx: K[UInt64],
+    rdx: K[UInt64],
+    rsi: K[UInt64],
+    rdi: K[UInt64],
+    rbp: K[UInt64],
+    r8: K[UInt64],
+    r9: K[UInt64],
+    r10: K[UInt64],
+    r11: K[UInt64],
+    r12: K[UInt64],
+    r13: K[UInt64],
+    r14: K[UInt64],
+    r15: K[UInt64],
+    rip: K[UInt64],
+    cs: K[UInt64],
+    rflags: K[UInt64],
+    rsp: K[UInt64],
+    ss: K[UInt64]
+}];
+
+// Exception types
+const EXCEPTION_DE: K[UInt8] = 0;   // Divide Error
+const EXCEPTION_DB: K[UInt8] = 1;   // Debug
+const EXCEPTION_NMI: K[UInt8] = 2;  // Non-maskable Interrupt
+const EXCEPTION_BP: K[UInt8] = 3;    // Breakpoint
+const EXCEPTION_OF: K[UInt8] = 4;    // Overflow
+const EXCEPTION_BR: K[UInt8] = 5;   // Bound Range Exceeded
+const EXCEPTION_UD: K[UInt8] = 6;   // Invalid Opcode
+const EXCEPTION_NM: K[UInt8] = 7;   // Device Not Available
+const EXCEPTION_DF: K[UInt8] = 8;   // Double Fault
+const EXCEPTION_TS: K[UInt8] = 10;  // Invalid TSS
+const EXCEPTION_NP: K[UInt8] = 11;  // Segment Not Present
+const EXCEPTION_SS: K[UInt8] = 12; // Stack Fault
+const EXCEPTION_GP: K[UInt8] = 13;  // General Protection
+const EXCEPTION_PF: K[UInt8] = 14;  // Page Fault
+
+// Initialize CPU subsystem
+K cpu_init() -> K[Unit] {
+    emit "XDV CPU: Initializing CPU subsystem";
+    
+    // Setup GDT
+    setup_gdt();
+    
+    // Setup IDT
+    setup_idt();
+    
+    // Setup TSS
+    setup_tss();
+    
+    // Enable interrupts
+    enable_interrupts();
+    
+    emit "XDV CPU: CPU subsystem initialized";
+}
+
+// Setup Global Descriptor Table
+K setup_gdt() -> K[Unit] {
+    emit "XDV CPU: Setting up GDT";
+    // GDT setup code
+}
+
+// Setup Interrupt Descriptor Table
+K setup_idt() -> K[Unit] {
+    emit "XDV CPU: Setting up IDT";
+    // Register exception handlers
+    set_exception_handler(EXCEPTION_DE, divide_error_handler);
+    set_exception_handler(EXCEPTION_PF, page_fault_handler);
+    // IDT setup code
+}
+
+// Setup Task State Segment
+K setup_tss() -> K[Unit] {
+    emit "XDV CPU: Setting up TSS";
+    // TSS setup code
+}
+
+// Set exception handler
+K set_exception_handler(K[UInt8] vector, K[Ptr[K[Fn]]] handler) -> K[Unit] {
+    // Exception handler registration
+}
+
+// Divide error handler
+K divide_error_handler(K[InterruptFrame] frame) -> K[Unit] {
+    emit "XDV CPU: Divide error exception!";
+}
+
+// Page fault handler
+K page_fault_handler(K[InterruptFrame] frame) -> K[Unit] {
+    emit "XDV CPU: Page fault exception!";
+}
+
+// Enable interrupts
+K enable_interrupts() -> K[Unit] {
+    // STI instruction
+}
+
+// Disable interrupts
+K disable_interrupts() -> K[Unit] {
+    // CLI instruction
+}
+
+// Halt CPU
+K halt() -> K[Unit] {
+    // HLT instruction
+}
+
+// Read CR0 register
+K read_cr0() -> K[UInt64] {
+    0
+}
+
+// Write CR0 register
+K write_cr0(K[UInt64] value) -> K[Unit] {
+}
+
+// Read CR2 register (page fault address)
+K read_cr2() -> K[UInt64] {
+    0
+}
+
+// Write CR3 register (page table directory)
+K write_cr3(K[UInt64] pml4) -> K[Unit] {
+}
+
+// Read CR4 register
+K read_cr4() -> K[UInt64] {
+    0
+}
+
+// Write CR4 register
+K write_cr4(K[UInt64] value) -> K[Unit] {
+}
+
+// Get current stack pointer
+K get_sp() -> K[UInt64] {
+    0
+}
+
+// Get current instruction pointer
+K get_ip() -> K[UInt64] {
+    0
+}

@@ -1,0 +1,8 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_drivers"
+version = "0.2.0"
+description = "XDV Kernel device drivers"
+
+[dependencies]

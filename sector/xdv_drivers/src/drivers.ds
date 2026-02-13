@@ -1,0 +1,177 @@
+// XDV Kernel - Device Drivers Sector
+// Basic hardware drivers for the kernel
+//
+// This module provides:
+// - VGA text mode display driver
+// - Keyboard driver (PS/2)
+// - Serial port driver
+
+module xdv_drivers;
+
+// VGA constants
+const VGA_WIDTH: K[UInt32] = 80;
+const VGA_HEIGHT: K[UInt32] = 25;
+const VGA_MEMORY: K[UInt64] = 0xB8000;
+
+// VGA colors
+const VGA_COLOR_BLACK: K[UInt8] = 0;
+const VGA_COLOR_BLUE: K[UInt8] = 1;
+const VGA_COLOR_GREEN: K[UInt8] = 2;
+const VGA_COLOR_CYAN: K[UInt8] = 3;
+const VGA_COLOR_RED: K[UInt8] = 4;
+const VGA_COLOR_MAGENTA: K[UInt8] = 5;
+const VGA_COLOR_BROWN: K[UInt8] = 6;
+const VGA_COLOR_LIGHT_GREY: K[UInt8] = 7;
+const VGA_COLOR_DARK_GREY: K[UInt8] = 8;
+const VGA_COLOR_LIGHT_BLUE: K[UInt8] = 9;
+const VGA_COLOR_LIGHT_GREEN: K[UInt8] = 10;
+const VGA_COLOR_LIGHT_CYAN: K[UInt8] = 11;
+const VGA_COLOR_LIGHT_RED: K[UInt8] = 12;
+const VGA_COLOR_LIGHT_MAGENTA: K[UInt8] = 13;
+const VGA_COLOR_LIGHT_BROWN: K[UInt8] = 14;
+const VGA_COLOR_WHITE: K[UInt8] = 15;
+
+// Serial port constants
+const SERIAL_PORT_BASE: K[UInt16] = 0x3F8;
+const SERIAL_DATA: K[UInt16] = 0x3F8;      // Data register (R/W)
+const SERIAL_IER: K[UInt16] = 0x3F9;       // Interrupt enable
+const SERIAL_IIR: K[UInt16] = 0x3FA;       // Interrupt identification
+const SERIAL_LCR: K[UInt16] = 0x3FB;       // Line control
+const SERIAL_MCR: K[UInt16] = 0x3FC;       // Modem control
+const SERIAL_LSR: K[UInt16] = 0x3FD;       // Line status
+const SERIAL_MSR: K[UInt16] = 0x3FE;       // Modem status
+
+// Initialize all drivers
+K drivers_init() -> K[Unit] {
+    emit "XDV Drivers: Initializing drivers";
+    
+    // Initialize VGA
+    vga_init();
+    
+    // Initialize keyboard
+    keyboard_init();
+    
+    // Initialize serial port
+    serial_init();
+    
+    emit "XDV Drivers: Drivers initialized";
+}
+
+// Initialize VGA display
+K vga_init() -> K[Unit] {
+    // Clear screen
+    vga_clear_screen();
+    
+    // Set default color
+    vga_set_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    
+    // Move cursor to start
+    vga_set_cursor(0, 0);
+    
+    emit "XDV Drivers: VGA initialized";
+}
+
+// Clear VGA screen
+K vga_clear_screen() -> K[Unit] {
+    mut let y: K[UInt32] = 0;
+    
+    while y < VGA_HEIGHT {
+        mut let x: K[UInt32] = 0;
+        while x < VGA_WIDTH {
+            vga_putchar_at(' ', VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK, x, y);
+            x = x + 1;
+        }
+        y = y + 1;
+    }
+}
+
+// Put character at specific position
+K vga_putchar_at(K[Char] ch, K[UInt8] fg, K[UInt8] bg, K[UInt32] x, K[UInt32] y) -> K[Unit] {
+    let offset: K[UInt64] = ((y as K[UInt64]) * (VGA_WIDTH as K[UInt64]) + (x as K[UInt64])) * 2;
+    let vga_mem: K[Ptr[K[UInt16]]] = VGA_MEMORY as K[Ptr[K[UInt16]]];
+    let value: K[UInt16] = ((bg as K[UInt16]) << 8) | (ch as K[UInt16]);
+    // Write to VGA memory
+}
+
+// Set cursor position
+K vga_set_cursor(K[UInt32] x, K[UInt32] y) -> K[Unit] {
+    let position: K[UInt16] = ((y * VGA_WIDTH) + x) as K[UInt16];
+    // Set cursor position via I/O ports
+}
+
+// Set foreground/background color
+K vga_set_color(K[UInt8] fg, K[UInt8] bg) -> K[Unit] {
+    // Set current color
+}
+
+// Put character with current color
+K vga_putchar(K[Char] ch) -> K[Unit] {
+    vga_putchar_at(ch, VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK, 0, 0);
+}
+
+// Print string to VGA
+K vga_print(K[Ptr[K[Char]]] s) -> K[Unit] {
+    mut let i: K[UInt64] = 0;
+    
+    while s[i] != '\0' {
+        vga_putchar(s[i]);
+        i = i + 1;
+    }
+}
+
+// Initialize keyboard
+K keyboard_init() -> K[Unit] {
+    emit "XDV Drivers: Keyboard initialized";
+}
+
+// Read keyboard scancode
+K keyboard_read() -> K[UInt8] {
+    0
+}
+
+// Initialize serial port
+K serial_init() -> K[Unit] {
+    // Disable interrupts
+    serial_out(SERIAL_IER, 0);
+    
+    // Set DLAB
+    serial_out(SERIAL_LCR, 0x80);
+    
+    // Set divisor (115200 / 9600 = 12)
+    serial_out(SERIAL_DATA, 12);
+    serial_out(SERIAL_IER, 0);
+    
+    // 8 data bits, no parity, 1 stop bit
+    serial_out(SERIAL_LCR, 0x03);
+    
+    // Enable FIFO, clear them
+    serial_out(SERIAL_IIR, 0x07);
+    
+    emit "XDV Drivers: Serial port initialized";
+}
+
+// Serial port output
+K serial_out(K[UInt16] port, K[UInt8] value) -> K[Unit] {
+    // OUT instruction
+}
+
+// Serial port input
+K serial_in(K[UInt16] port) -> K[UInt8] {
+    0
+}
+
+// Write to serial port
+K serial_write(K[UInt8] value) -> K[Unit] {
+    // Wait for transmit buffer empty
+    serial_out(SERIAL_DATA, value);
+}
+
+// Write string to serial
+K serial_print(K[Ptr[K[Char]]] s) -> K[Unit] {
+    mut let i: K[UInt64] = 0;
+    
+    while s[i] != '\0' {
+        serial_write(s[i] as K[UInt8]);
+        i = i + 1;
+    }
+}

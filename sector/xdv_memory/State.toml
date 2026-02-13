@@ -1,0 +1,8 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_memory"
+version = "0.2.0"
+description = "XDV Kernel memory management"
+
+[dependencies]
