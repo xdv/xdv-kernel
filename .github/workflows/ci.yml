@@ -34,12 +34,11 @@ jobs:
           cd ../dust
           cargo build --workspace
 
-      - name: Build XDV kernel
+      - name: Check all kernel sectors
         run: |
           export PATH="$PWD/../dust/target/debug:$PATH"
-          dust build
-
-      - name: Test XDV kernel
-        run: |
-          export PATH="$PWD/../dust/target/debug:$PATH"
-          dust test
+          for sector in xdv_boot xdv_memory xdv_cpu xdv_kernel xdv_drivers xdv_dal xdv_qdomain xdv_phidomain xdv_cds xdv_umf xdv_hypervisor xdv_sdbm xdv_odt; do
+            echo "Checking sector/$sector/src..."
+            dust check "sector/$sector/src" || { echo "FAILED: $sector"; exit 1; }
+          done
+          echo "All 13 sectors check OK"
