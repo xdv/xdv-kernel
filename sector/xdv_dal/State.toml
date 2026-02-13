@@ -1,0 +1,8 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_dal"
+version = "0.2.0"
+description = "XDV Domain Abstraction Layer - K/Q/Φ domain types and interfaces"
+
+[dependencies]

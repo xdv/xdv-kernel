@@ -26,6 +26,38 @@ path = "sector/xdv_drivers"
 name = "xdv_kernel"
 path = "sector/xdv_kernel"
 
+[[sector]]
+name = "xdv_dal"
+path = "sector/xdv_dal"
+
+[[sector]]
+name = "xdv_qdomain"
+path = "sector/xdv_qdomain"
+
+[[sector]]
+name = "xdv_phidomain"
+path = "sector/xdv_phidomain"
+
+[[sector]]
+name = "xdv_cds"
+path = "sector/xdv_cds"
+
+[[sector]]
+name = "xdv_umf"
+path = "sector/xdv_umf"
+
+[[sector]]
+name = "xdv_hypervisor"
+path = "sector/xdv_hypervisor"
+
+[[sector]]
+name = "xdv_sdbm"
+path = "sector/xdv_sdbm"
+
+[[sector]]
+name = "xdv_odt"
+path = "sector/xdv_odt"
+
 [target.x64-pc-none]
 linker = "ld"
 linker_flags = ["-nostdlib", "-static"]

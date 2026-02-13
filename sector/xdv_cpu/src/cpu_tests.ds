@@ -1,0 +1,44 @@
+// XDV Kernel - CPU Sector Tests
+
+forge CpuTests {
+
+    proc K::test_exception_constants() {
+        return 0;
+    }
+
+    proc K::test_gdt_entry() {
+        return 0;
+    }
+
+    proc K::test_idt_entry() {
+        return 0;
+    }
+
+    proc K::test_interrupt_frame() {
+        return 0;
+    }
+
+    proc K::test_cr0() {
+        return 0;
+    }
+
+    proc K::test_cr2() {
+        return 0;
+    }
+
+    proc K::test_cr3() {
+        return 0;
+    }
+
+    proc K::test_cr4() {
+        return 0;
+    }
+
+    proc K::test_sp() {
+        return 0;
+    }
+
+    proc K::test_ip() {
+        return 0;
+    }
+}

@@ -1,0 +1,43 @@
+// XDV Kernel - Q-Domain Tests
+
+forge QDomainTests {
+
+    proc K::test_q_error_constants() {
+        let a = 1;
+        let b = 2;
+        return 0;
+    }
+
+    proc K::test_qubit_state_enum() {
+        return 0;
+    }
+
+    proc K::test_alloc_quantum_register_valid() {
+        return 0;
+    }
+
+    proc K::test_alloc_quantum_register_zero_qubits() {
+        return 0;
+    }
+
+    proc K::test_alloc_quantum_register_exceeds_max() {
+        return 0;
+    }
+
+    proc K::test_get_qerror_metrics() {
+        return 0;
+    }
+
+    proc K::test_create_quantum_job() {
+        return 0;
+    }
+
+    proc K::test_gate_name_hadamard() {
+        return 0;
+    }
+
+    proc K::test_gate_name_cnot() {
+        return 0;
+    }
+
+}

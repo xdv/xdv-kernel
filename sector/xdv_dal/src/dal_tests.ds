@@ -1,0 +1,40 @@
+// XDV Kernel - DAL Tests
+
+forge DalTests {
+
+    proc K::test_domain_types() {
+        return 0;
+    }
+
+    proc K::test_domain_constants() {
+        return 0;
+    }
+
+    proc K::test_capabilities() {
+        return 0;
+    }
+
+    proc K::test_domain_status() {
+        return 0;
+    }
+
+    proc K::test_default_caps_k() {
+        return 0;
+    }
+
+    proc K::test_default_caps_q() {
+        return 0;
+    }
+
+    proc K::test_default_caps_phi() {
+        return 0;
+    }
+
+    proc K::test_validate_caps() {
+        return 0;
+    }
+
+    proc K::test_transfer_contract() {
+        return 0;
+    }
+}

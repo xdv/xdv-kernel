@@ -1,0 +1,8 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_phidomain"
+version = "0.2.0"
+description = "XDV Φ-Domain - Phase-native computation subsystem"
+
+[dependencies]

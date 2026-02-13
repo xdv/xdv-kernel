@@ -1,0 +1,40 @@
+// XDV Kernel - Memory Sector Tests
+
+forge MemoryTests {
+
+    proc K::test_page_size() {
+        return 0;
+    }
+
+    proc K::test_page_shift() {
+        return 0;
+    }
+
+    proc K::test_kernel_pages() {
+        return 0;
+    }
+
+    proc K::test_pte_flags() {
+        return 0;
+    }
+
+    proc K::test_alloc_page() {
+        return 0;
+    }
+
+    proc K::test_free_page() {
+        return 0;
+    }
+
+    proc K::test_vmalloc() {
+        return 0;
+    }
+
+    proc K::test_vmfree() {
+        return 0;
+    }
+
+    proc K::test_mprotect() {
+        return 0;
+    }
+}

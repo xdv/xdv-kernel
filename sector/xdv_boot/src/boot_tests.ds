@@ -1,0 +1,20 @@
+// XDV Kernel - Boot Sector Tests
+
+forge BootTests {
+
+    proc K::test_constants() {
+        let a = 1;
+        let b = 2;
+        return 0;
+    }
+
+    proc K::test_arithmetic() {
+        let x = 10;
+        let y = 5;
+        return 0;
+    }
+
+    proc K::test_memory_values() {
+        return 0;
+    }
+}

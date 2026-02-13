@@ -1,0 +1,8 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_sdbm"
+version = "0.2.0"
+description = "XDV Secure Domain Boundary Manager - Capability-based access control"
+
+[dependencies]

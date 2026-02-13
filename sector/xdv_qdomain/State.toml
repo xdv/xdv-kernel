@@ -1,0 +1,8 @@
+# XDV Kernel Sector Manifest
+
+[sector]
+name = "xdv_qdomain"
+version = "0.2.0"
+description = "XDV Q-Domain - Quantum computation subsystem"
+
+[dependencies]

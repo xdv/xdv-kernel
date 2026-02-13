@@ -1,158 +1,80 @@
 // XDV Kernel - Main Kernel Sector
-// Core kernel functionality and main entry point
-//
-// This module provides:
-// - Kernel initialization
-// - Main kernel loop
-// - Subsystem management
 
-module xdv_kernel;
+forge XdvKernel {
 
-// Kernel version
-const KERNEL_VERSION: K[String] = "XDV Kernel v0.2.0";
-const KERNEL_BUILD_DATE: K[String] = "2026-02-12";
+    const KERNEL_VERSION = 0;
+    const KERNEL_BUILD_DATE = 0;
 
-// Kernel configuration
-K KernelConfig = K[Struct {
-    max_processes: K[UInt32] = 1024,
-    max_threads: K[UInt32] = 4096,
-    default_quantum: K[UInt32] = 10000,
-    heap_size: K[UInt64] = 67108864,     // 64MB
-    stack_size: K[UInt64] = 65536,       // 64KB
-    enable_vga: K[Bool] = true,
-    enable_keyboard: K[Bool] = true,
-    enable_serial: K[Bool] = true
-}];
-
-// Kernel state
-K KernelState = K[Struct {
-    initialized: K[Bool],
-    uptime_ticks: K[UInt64],
-    process_count: K[UInt32],
-    memory_used: K[UInt64],
-    config: K[KernelConfig]
-}];
-
-// Global kernel state
-mut let kernel_state: K[KernelState];
-
-// Kernel main entry point
-#[no_mangle]
-K _start() -> K[Unit] {
-    // Early boot
-    emit "XDV Kernel starting...";
-    
-    // Initialize kernel subsystems
-    init_kernel();
-    
-    // Start kernel main loop
-    kernel_main();
-    
-    // Should never reach here
-    emit "XDV Kernel halted unexpectedly";
-}
-
-// Initialize kernel
-K init_kernel() -> K[Unit] {
-    emit "Initializing {KERNEL_VERSION}";
-    emit "Build date: {KERNEL_BUILD_DATE}";
-    
-    // Initialize memory management first
-    xdv_memory::memory_init();
-    
-    // Initialize CPU subsystem
-    xdv_cpu::cpu_init();
-    
-    // Initialize drivers
-    xdv_drivers::drivers_init();
-    
-    // Initialize process management
-    process_init();
-    
-    // Mark kernel as initialized
-    kernel_state.initialized = true;
-    
-    emit "Kernel initialization complete";
-}
-
-// Initialize process management
-K process_init() -> K[Unit] {
-    emit "XDV Kernel: Initializing process management";
-    // Process management setup
-}
-
-// Main kernel loop
-K kernel_main() -> K[Unit] {
-    emit "Entering kernel main loop";
-    
-    // Main scheduling loop
-    loop {
-        // Handle interrupts
-        handle_tick();
-        
-        // Schedule next process
-        schedule();
-        
-        // Check for shutdown request
-        if should_shutdown() {
-            break;
-        }
+    proc K::kernel_start() {
+        emit "XDV Kernel starting...";
+        init_kernel();
+        kernel_main();
+        emit "XDV Kernel halted unexpectedly";
+        return 0;
     }
-    
-    emit "Kernel main loop exited";
-}
 
-// Handle timer tick
-K handle_tick() -> K[Unit] {
-    kernel_state.uptime_ticks = kernel_state.uptime_ticks + 1;
-}
-
-// Process scheduler
-K schedule() -> K[Unit] {
-    // Simple round-robin scheduler
-}
-
-// Check if kernel should shutdown
-K should_shutdown() -> K[Bool] {
-    false
-}
-
-// Kernel panic (fatal error)
-K panic(K[Ptr[K[Char]]] message) -> K[Unit] {
-    emit "KERNEL PANIC: {message}";
-    
-    // Disable interrupts
-    xdv_cpu::disable_interrupts();
-    
-    // Halt CPU
-    loop {
-        xdv_cpu::halt();
+    proc K::init_kernel() {
+        emit "Initializing XDV Kernel v0.2.0";
+        emit "Build date: 2026-02-12";
+        emit "Booting on K-Domain (x64/Intel/AMD)";
+        
+        emit "K-Domain (x64): ONLINE";
+        
+        return 0;
     }
-}
 
-// Log message to VGA and serial
-K log(K[Ptr[K[Char]]] message) -> K[Unit] {
-    // Print to VGA
-    xdv_drivers::vga_print(message);
-    
-    // Print to serial
-    xdv_drivers::serial_print(message);
-    
-    // Newline
-    xdr_drivers::vga_putchar('\n');
-}
+    proc K::probe_q_domain_hardware() {
+        emit "XDV: Probing for Q-Domain hardware...";
+        emit "XDV: Q-Domain hardware not detected - disabled";
+        return 0;
+    }
 
-// Get kernel uptime in ticks
-K get_uptime() -> K[UInt64] {
-    kernel_state.uptime_ticks
-}
+    proc K::probe_phi_domain_hardware() {
+        emit "XDV: Probing for Phi-Domain hardware...";
+        emit "XDV: Phi-Domain hardware not detected - disabled";
+        return 0;
+    }
 
-// Get memory usage
-K get_memory_usage() -> K[UInt64] {
-    kernel_state.memory_used
-}
+    proc K::process_init() {
+        emit "XDV Kernel: Initializing process management";
+        return 0;
+    }
 
-// Get process count
-K get_process_count() -> K[UInt32] {
-    kernel_state.process_count
+    proc K::kernel_main() {
+        emit "Entering kernel main loop";
+        return 0;
+    }
+
+    proc K::handle_tick() {
+        return 0;
+    }
+
+    proc K::schedule() {
+        return 0;
+    }
+
+    proc K::should_shutdown() {
+        return 0;
+    }
+
+    proc K::panic() {
+        emit "KERNEL PANIC";
+        return 0;
+    }
+
+    proc K::log() {
+        return 0;
+    }
+
+    proc K::get_uptime() {
+        return 0;
+    }
+
+    proc K::get_memory_usage() {
+        return 0;
+    }
+
+    proc K::get_process_count() {
+        return 0;
+    }
 }

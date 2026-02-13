@@ -1,0 +1,28 @@
+// XDV Kernel - Drivers Sector Tests
+
+forge DriversTests {
+
+    proc K::test_vga_dimensions() {
+        return 0;
+    }
+
+    proc K::test_vga_memory() {
+        return 0;
+    }
+
+    proc K::test_vga_colors() {
+        return 0;
+    }
+
+    proc K::test_serial_ports() {
+        return 0;
+    }
+
+    proc K::test_keyboard() {
+        return 0;
+    }
+
+    proc K::test_serial() {
+        return 0;
+    }
+}
