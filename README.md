@@ -7,8 +7,8 @@ A Cross-Domain Virtualizer operating system kernel for x86-64, written entirely 
 XDV v0.2 is a multi-domain operating system kernel that supports three computational domains:
 
 - **K-Domain (Classical)**: Traditional von Neumann computing on x64 (FULL SUPPORT)
-- **Q-Domain (Quantum)**: Quantum computing simulation (TYPE STUBS - returns ERR_DOMAIN_NOT_AVAILABLE)
-- **Φ-Domain (Phase-Native)**: Phase-based computation (TYPE STUBS - returns ERR_DOMAIN_NOT_AVAILABLE)
+- **Q-Domain (Quantum)**: Hardware-gated quantum services (returns ERR_DOMAIN_NOT_AVAILABLE when unavailable)
+- **Φ-Domain (Phase-Native)**: Hardware-gated phase services (returns ERR_DOMAIN_NOT_AVAILABLE when unavailable)
 
 The kernel runs on classical x86-64 hardware with full K-Domain functionality.
 
@@ -29,8 +29,8 @@ The kernel is organized into 13 sectors:
 | `xdv_drivers` | Device drivers (VGA, keyboard, storage, network) | ✅ |
 | `xdv_kernel` | Core kernel functionality and main loop | ✅ |
 | `xdv_dal` | Domain Abstraction Layer - unified domain interfaces | ✅ |
-| `xdv_qdomain` | Quantum domain subsystem (stubbed) | ✅ |
-| `xdv_phidomain` | Phase-Native domain subsystem (stubbed) | ✅ |
+| `xdv_qdomain` | Quantum domain subsystem (hardware-gated) | ✅ |
+| `xdv_phidomain` | Phase-Native domain subsystem (hardware-gated) | ✅ |
 | `xdv_cds` | Cross-Domain Scheduler | ✅ |
 | `xdv_umf` | Unified Memory Fabric | ✅ |
 | `xdv_hypervisor` | Domain Hypervisor | ✅ |
@@ -63,10 +63,10 @@ xdv-kernel/
 │   ├── xdv_dal/         # Domain Abstraction Layer
 │   │   ├── dal.ds
 │   │   └── dal_tests.ds
-│   ├── xdv_qdomain/     # Quantum domain (stubbed)
+│   ├── xdv_qdomain/     # Quantum domain (hardware-gated)
 │   │   ├── qdomain.ds
 │   │   └── qdomain_tests.ds
-│   ├── xdv_phidomain/   # Phase-native domain (stubbed)
+│   ├── xdv_phidomain/   # Phase-native domain (hardware-gated)
 │   │   ├── phidomain.ds
 │   │   └── phidomain_tests.ds
 │   ├── xdv_cds/         # Cross-Domain Scheduler
@@ -95,12 +95,12 @@ Traditional computing on x86-64 architecture with full kernel support:
 - Device I/O
 - System calls
 
-### Q-Domain (Quantum) - STUBBED
-Type definitions present but operations return ERR_DOMAIN_NOT_AVAILABLE (100)
+### Q-Domain (Quantum) - HARDWARE GATED
+Operations return ERR_DOMAIN_NOT_AVAILABLE (100) when quantum hardware is not detected.
 - Check availability: `q_available()` returns 0
 
-### Φ-Domain (Phase-Native) - STUBBED
-Type definitions present but operations return ERR_DOMAIN_NOT_AVAILABLE (100)
+### Φ-Domain (Phase-Native) - HARDWARE GATED
+Operations return ERR_DOMAIN_NOT_AVAILABLE (100) when phase-native hardware is not detected.
 - Check availability: `phi_available()` returns 0
 
 ## Building

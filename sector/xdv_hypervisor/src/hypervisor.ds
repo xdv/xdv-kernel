@@ -2,71 +2,113 @@
 
 forge XdvHypervisor {
 
-    proc K::hypervisor_init() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_CONFIG_ERROR: UInt32 = 1;
+    const STATUS_VM_NOT_FOUND: UInt32 = 2;
+
+    const DEFAULT_VM_ID: UInt32 = 1;
+
+    proc K::hypervisor_init() -> UInt32 {
         emit "XDV Hypervisor: Initializing domain hypervisor";
         init_vm_manager();
         init_resource_pools();
         init_isolation_layer();
         emit "XDV Hypervisor: Domain hypervisor initialized";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_vm_manager() {
+    proc K::init_vm_manager() -> UInt32 {
         emit "XDV Hypervisor: Initializing VM manager";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_resource_pools() {
+    proc K::init_resource_pools() -> UInt32 {
         emit "XDV Hypervisor: Initializing resource pools";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_isolation_layer() {
+    proc K::init_isolation_layer() -> UInt32 {
         emit "XDV Hypervisor: Initializing isolation layer";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::create_virtual_machine() {
-        return 0;
+    proc K::create_virtual_machine(profile: UInt32) -> UInt32 {
+        if profile == 0 {
+            return STATUS_CONFIG_ERROR;
+        } else {
+            return DEFAULT_VM_ID + profile;
+        }
     }
 
-    proc K::configure_vcpus() {
-        return 0;
+    proc K::configure_vcpus(vm_id: UInt32, count: UInt32) -> UInt32 {
+        if vm_id == 0 {
+            return STATUS_VM_NOT_FOUND;
+        } else {
+            if count == 0 {
+                return STATUS_CONFIG_ERROR;
+            } else {
+                return STATUS_OK;
+            }
+        }
     }
 
-    proc K::configure_vqpu() {
-        return 0;
+    proc K::configure_vqpu(vm_id: UInt32, count: UInt32) -> UInt32 {
+        return configure_vcpus(vm_id, count);
     }
 
-    proc K::configure_vphipu() {
-        return 0;
+    proc K::configure_vphipu(vm_id: UInt32, count: UInt32) -> UInt32 {
+        return configure_vcpus(vm_id, count);
     }
 
-    proc K::configure_vm_memory() {
-        return 0;
+    proc K::configure_vm_memory(vm_id: UInt32, bytes: UInt64) -> UInt32 {
+        if vm_id == 0 {
+            return STATUS_VM_NOT_FOUND;
+        } else {
+            if bytes == 0 {
+                return STATUS_CONFIG_ERROR;
+            } else {
+                return STATUS_OK;
+            }
+        }
     }
 
-    proc K::start_virtual_machine() {
-        return 0;
+    proc K::start_virtual_machine(vm_id: UInt32) -> UInt32 {
+        if vm_id == 0 {
+            return STATUS_VM_NOT_FOUND;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::pause_virtual_machine() {
-        return 0;
+    proc K::pause_virtual_machine(vm_id: UInt32) -> UInt32 {
+        if vm_id == 0 {
+            return STATUS_VM_NOT_FOUND;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::resume_virtual_machine() {
-        return 0;
+    proc K::resume_virtual_machine(vm_id: UInt32) -> UInt32 {
+        return start_virtual_machine(vm_id);
     }
 
-    proc K::destroy_virtual_machine() {
-        return 0;
+    proc K::destroy_virtual_machine(vm_id: UInt32) -> UInt32 {
+        if vm_id == 0 {
+            return STATUS_VM_NOT_FOUND;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::verify_vm_isolation() {
-        return 1;
+    proc K::verify_vm_isolation(vm_id: UInt32) -> UInt32 {
+        if vm_id == 0 {
+            return STATUS_VM_NOT_FOUND;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::get_hypervisor_stats() {
-        return 0;
+    proc K::get_hypervisor_stats() -> UInt32 {
+        return DEFAULT_VM_ID;
     }
 }

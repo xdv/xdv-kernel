@@ -7,72 +7,126 @@ forge XdvPhiDomain {
     const PHI_ERROR_INVALID_PHASE: UInt32 = 2;
     const PHI_ERROR_WINDOW_EXPIRED: UInt32 = 3;
     const PHI_ERROR_INTEGRITY: UInt32 = 4;
+    const PHI_ERROR_NOT_AVAILABLE: UInt32 = 100;
 
-    proc K::phidomain_init() {
+    proc K::phidomain_init() -> UInt32 {
         emit "XDV Phi-Domain: Initializing phase-native subsystem";
-        init_phase_hardware();
-        init_coherence_manager();
-        init_phase_scheduler();
-        emit "XDV Phi-Domain: Phase-native subsystem initialized";
-        return 0;
+        let hw_status = init_phase_hardware();
+        if hw_status == PHI_ERROR_NONE {
+            init_coherence_manager();
+            init_phase_scheduler();
+            emit "XDV Phi-Domain: Phase-native subsystem initialized";
+            return PHI_ERROR_NONE;
+        } else {
+            emit "XDV Phi-Domain: hardware unavailable";
+            return PHI_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::init_phase_hardware() {
+    proc K::init_phase_hardware() -> UInt32 {
         emit "XDV Phi-Domain: Initializing phase-native hardware interface";
-        return 0;
+        return PHI_ERROR_NOT_AVAILABLE;
     }
 
-    proc K::init_coherence_manager() {
+    proc K::init_coherence_manager() -> UInt32 {
         emit "XDV Phi-Domain: Initializing coherence manager";
-        return 0;
+        return PHI_ERROR_NONE;
     }
 
-    proc K::init_phase_scheduler() {
+    proc K::init_phase_scheduler() -> UInt32 {
         emit "XDV Phi-Domain: Initializing phase scheduler";
-        return 0;
+        return PHI_ERROR_NONE;
     }
 
-    proc K::alloc_phase_register() {
-        return 0;
+    proc K::alloc_phase_register(size: UInt32) -> UInt32 {
+        if size == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            return PHI_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::free_phase_register() {
-        return 0;
+    proc K::free_phase_register(register_id: UInt32) -> UInt32 {
+        if register_id == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            return PHI_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::create_phase_value() {
-        return 0;
+    proc K::create_phase_value(value: UInt32) -> UInt32 {
+        if value == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            return value;
+        }
     }
 
-    proc K::apply_phase_transform() {
-        return 0;
+    proc K::apply_phase_transform(state: UInt32, transform: UInt32) -> UInt32 {
+        if state == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            if transform == 0 {
+                return PHI_ERROR_INVALID_PHASE;
+            } else {
+                return PHI_ERROR_NOT_AVAILABLE;
+            }
+        }
     }
 
-    proc K::measure_phase() {
-        return 0;
+    proc K::measure_phase(state: UInt32) -> UInt32 {
+        if state == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            return PHI_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::alloc_coherence_window() {
-        return 0;
+    proc K::alloc_coherence_window(duration_ns: UInt64) -> UInt32 {
+        if duration_ns == 0 {
+            return PHI_ERROR_WINDOW_EXPIRED;
+        } else {
+            return PHI_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::check_coherence_integrity() {
-        return 1;
+    proc K::check_coherence_integrity(state: UInt32) -> UInt32 {
+        if state == 0 {
+            return PHI_ERROR_INTEGRITY;
+        } else {
+            return PHI_ERROR_COHERENCE_LOST;
+        }
     }
 
-    proc K::compute_interference() {
-        return 0;
+    proc K::compute_interference(a: UInt32, b: UInt32) -> UInt32 {
+        if a == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            if b == 0 {
+                return PHI_ERROR_INVALID_PHASE;
+            } else {
+                return PHI_ERROR_NOT_AVAILABLE;
+            }
+        }
     }
 
-    proc K::get_phi_diagnostics() {
-        return 0;
+    proc K::get_phi_diagnostics() -> UInt32 {
+        return PHI_ERROR_NOT_AVAILABLE;
     }
 
-    proc K::transform_name() {
-        return 0;
+    proc K::transform_name(transform: UInt32) -> UInt32 {
+        if transform == 0 {
+            return PHI_ERROR_INVALID_PHASE;
+        } else {
+            return transform;
+        }
     }
 
-    proc K::validate_phase_state() {
-        return 1;
+    proc K::validate_phase_state(state: UInt32) -> UInt32 {
+        if state == 0 {
+            return PHI_ERROR_INTEGRITY;
+        } else {
+            return PHI_ERROR_NOT_AVAILABLE;
+        }
     }
 }

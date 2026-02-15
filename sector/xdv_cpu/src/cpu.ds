@@ -4,72 +4,93 @@ forge XdvCpu {
     const EXCEPTION_DB: UInt8 = 1;
     const EXCEPTION_PF: UInt8 = 14;
 
-    proc K::cpu_init() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INIT_ERROR: UInt32 = 1;
+
+    const CR0_BOOT: UInt64 = 1;
+    const CR2_BOOT: UInt64 = 0;
+    const CR4_BOOT: UInt64 = 32;
+    const STACK_POINTER_BOOT: UInt64 = 2147483648;
+    const INSTRUCTION_POINTER_BOOT: UInt64 = 1048576;
+
+    proc K::cpu_init() -> UInt32 {
         emit "XDV CPU: Initializing CPU subsystem";
-        setup_gdt();
-        setup_idt();
-        setup_tss();
-        enable_interrupts();
-        emit "XDV CPU: CPU subsystem initialized";
-        return 0;
+        let gdt_status = setup_gdt();
+        if gdt_status == STATUS_OK {
+            let idt_status = setup_idt();
+            if idt_status == STATUS_OK {
+                let tss_status = setup_tss();
+                if tss_status == STATUS_OK {
+                    enable_interrupts();
+                    emit "XDV CPU: CPU subsystem initialized";
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INIT_ERROR;
+                }
+            } else {
+                return STATUS_INIT_ERROR;
+            }
+        } else {
+            return STATUS_INIT_ERROR;
+        }
     }
 
-    proc K::setup_gdt() {
+    proc K::setup_gdt() -> UInt32 {
         emit "XDV CPU: Setting up GDT";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::setup_idt() {
+    proc K::setup_idt() -> UInt32 {
         emit "XDV CPU: Setting up IDT";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::setup_tss() {
+    proc K::setup_tss() -> UInt32 {
         emit "XDV CPU: Setting up TSS";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::enable_interrupts() {
-        return 0;
+    proc K::enable_interrupts() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::disable_interrupts() {
-        return 0;
+    proc K::disable_interrupts() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::halt() {
-        return 0;
+    proc K::halt() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::read_cr0() {
-        return 0;
+    proc K::read_cr0() -> UInt64 {
+        return CR0_BOOT;
     }
 
-    proc K::write_cr0() {
-        return 0;
+    proc K::write_cr0() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::read_cr2() {
-        return 0;
+    proc K::read_cr2() -> UInt64 {
+        return CR2_BOOT;
     }
 
-    proc K::write_cr3() {
-        return 0;
+    proc K::write_cr3() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::read_cr4() {
-        return 0;
+    proc K::read_cr4() -> UInt64 {
+        return CR4_BOOT;
     }
 
-    proc K::write_cr4() {
-        return 0;
+    proc K::write_cr4() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::get_sp() {
-        return 0;
+    proc K::get_sp() -> UInt64 {
+        return STACK_POINTER_BOOT;
     }
 
-    proc K::get_ip() {
-        return 0;
+    proc K::get_ip() -> UInt64 {
+        return INSTRUCTION_POINTER_BOOT;
     }
 }

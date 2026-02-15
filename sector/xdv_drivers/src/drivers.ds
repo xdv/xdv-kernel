@@ -8,52 +8,77 @@ forge XdvDrivers {
     const SERIAL_PORT_BASE: UInt16 = 1016;
     const SERIAL_DATA: UInt16 = 1016;
 
-    proc K::drivers_init() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INIT_ERROR: UInt32 = 1;
+    const KEY_NONE: UInt32 = 0;
+    const SERIAL_NO_DATA: UInt32 = 0;
+
+    proc K::drivers_init() -> UInt32 {
         emit "XDV Drivers: Initializing drivers";
-        vga_init();
-        keyboard_init();
-        serial_init();
-        emit "XDV Drivers: Drivers initialized";
-        return 0;
+        let vga_status = vga_init();
+        if vga_status == STATUS_OK {
+            let keyboard_status = keyboard_init();
+            if keyboard_status == STATUS_OK {
+                let serial_status = serial_init();
+                if serial_status == STATUS_OK {
+                    emit "XDV Drivers: Drivers initialized";
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INIT_ERROR;
+                }
+            } else {
+                return STATUS_INIT_ERROR;
+            }
+        } else {
+            return STATUS_INIT_ERROR;
+        }
     }
 
-    proc K::vga_init() {
-        vga_clear_screen();
-        vga_set_cursor();
-        emit "XDV Drivers: VGA initialized";
-        return 0;
+    proc K::vga_init() -> UInt32 {
+        let clear_status = vga_clear_screen();
+        if clear_status == STATUS_OK {
+            let cursor_status = vga_set_cursor();
+            if cursor_status == STATUS_OK {
+                emit "XDV Drivers: VGA initialized";
+                return STATUS_OK;
+            } else {
+                return STATUS_INIT_ERROR;
+            }
+        } else {
+            return STATUS_INIT_ERROR;
+        }
     }
 
-    proc K::vga_clear_screen() {
-        return 0;
+    proc K::vga_clear_screen() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::vga_set_cursor() {
-        return 0;
+    proc K::vga_set_cursor() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::vga_set_color() {
-        return 0;
+    proc K::vga_set_color() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::vga_putchar() {
-        return 0;
+    proc K::vga_putchar() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::vga_print() {
-        return 0;
+    proc K::vga_print() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::keyboard_init() {
+    proc K::keyboard_init() -> UInt32 {
         emit "XDV Drivers: Keyboard initialized";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::keyboard_read() {
-        return 0;
+    proc K::keyboard_read() -> UInt32 {
+        return KEY_NONE;
     }
 
-    proc K::serial_init() {
+    proc K::serial_init() -> UInt32 {
         serial_out();
         serial_out();
         serial_out();
@@ -61,22 +86,22 @@ forge XdvDrivers {
         serial_out();
         serial_out();
         emit "XDV Drivers: Serial port initialized";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::serial_out() {
-        return 0;
+    proc K::serial_out() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::serial_in() {
-        return 0;
+    proc K::serial_in() -> UInt32 {
+        return SERIAL_NO_DATA;
     }
 
-    proc K::serial_write() {
-        return 0;
+    proc K::serial_write() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::serial_print() {
-        return 0;
+    proc K::serial_print() -> UInt32 {
+        return STATUS_OK;
     }
 }

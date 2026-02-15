@@ -11,85 +11,159 @@ forge XdvSdbm {
     const PERM_MEASURE: UInt64 = 32;
     const PERM_TRANSFORM: UInt64 = 64;
 
-    proc K::sdbm_init() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_DENIED: UInt32 = 1;
+    const STATUS_INVALID_CAPABILITY: UInt32 = 2;
+
+    const TOKEN_INVALID: UInt64 = 0;
+    const TOKEN_BASE: UInt64 = 4096;
+    const PAYLOAD_EMPTY: UInt64 = 0;
+    const SIGNATURE_INVALID: UInt64 = 0;
+
+    proc K::sdbm_init() -> UInt32 {
         emit "XDV SDBM: Initializing secure domain boundary manager";
         init_capability_system();
         init_access_control();
         init_crypto_primitives();
         init_audit_system();
         emit "XDV SDBM: Secure domain boundary manager initialized";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_capability_system() {
+    proc K::init_capability_system() -> UInt32 {
         emit "XDV SDBM: Initializing capability system";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_access_control() {
+    proc K::init_access_control() -> UInt32 {
         emit "XDV SDBM: Initializing access control";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_crypto_primitives() {
+    proc K::init_crypto_primitives() -> UInt32 {
         emit "XDV SDBM: Initializing cryptographic primitives";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_audit_system() {
+    proc K::init_audit_system() -> UInt32 {
         emit "XDV SDBM: Initializing audit system";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::create_capability() {
-        return 0;
+    proc K::create_capability(subject: UInt64, permissions: UInt64) -> UInt64 {
+        if permissions == PERM_NONE {
+            return TOKEN_INVALID;
+        } else {
+            return TOKEN_BASE + subject + permissions;
+        }
     }
 
-    proc K::verify_capability() {
+    proc K::verify_capability(token: UInt64) -> UInt32 {
+        if token == TOKEN_INVALID {
+            return STATUS_INVALID_CAPABILITY;
+        } else {
+            return STATUS_OK;
+        }
+    }
+
+    proc K::check_permission(token: UInt64, requested: UInt64) -> UInt32 {
+        if token == TOKEN_INVALID {
+            return STATUS_DENIED;
+        } else {
+            if requested == PERM_NONE {
+                return STATUS_DENIED;
+            } else {
+                return STATUS_OK;
+            }
+        }
+    }
+
+    proc K::send_cross_domain_message(token: UInt64, payload: UInt64) -> UInt32 {
+        let capability_ok = verify_capability(token);
+        if capability_ok == STATUS_OK {
+            if payload == PAYLOAD_EMPTY {
+                return STATUS_DENIED;
+            } else {
+                return STATUS_OK;
+            }
+        } else {
+            return STATUS_DENIED;
+        }
+    }
+
+    proc K::validate_message(payload: UInt64) -> UInt32 {
+        if payload == PAYLOAD_EMPTY {
+            return STATUS_DENIED;
+        } else {
+            return STATUS_OK;
+        }
+    }
+
+    proc K::add_access_control_entry(subject: UInt64, permissions: UInt64) -> UInt32 {
+        if subject == PAYLOAD_EMPTY {
+            return STATUS_DENIED;
+        } else {
+            if permissions == PERM_NONE {
+                return STATUS_DENIED;
+            } else {
+                return STATUS_OK;
+            }
+        }
+    }
+
+    proc K::check_cross_domain_access(token: UInt64) -> UInt32 {
+        return verify_capability(token);
+    }
+
+    proc K::create_security_policy(mask: UInt64) -> UInt64 {
+        if mask == PERM_NONE {
+            return PERM_READ;
+        } else {
+            return mask;
+        }
+    }
+
+    proc K::log_audit_record(event_code: UInt32) -> UInt32 {
+        if event_code == 0 {
+            return STATUS_DENIED;
+        } else {
+            return STATUS_OK;
+        }
+    }
+
+    proc K::get_security_stats() -> UInt32 {
         return 1;
     }
 
-    proc K::check_permission() {
-        return 1;
+    proc K::generate_nonce(seed: UInt64) -> UInt64 {
+        return seed + 1;
     }
 
-    proc K::send_cross_domain_message() {
-        return 0;
+    proc K::sign_message(payload: UInt64, nonce: UInt64) -> UInt64 {
+        if payload == PAYLOAD_EMPTY {
+            return SIGNATURE_INVALID;
+        } else {
+            if nonce == PAYLOAD_EMPTY {
+                return SIGNATURE_INVALID;
+            } else {
+                return TOKEN_BASE + payload + nonce;
+            }
+        }
     }
 
-    proc K::validate_message() {
-        return 1;
-    }
-
-    proc K::add_access_control_entry() {
-        return 0;
-    }
-
-    proc K::check_cross_domain_access() {
-        return 1;
-    }
-
-    proc K::create_security_policy() {
-        return 0;
-    }
-
-    proc K::log_audit_record() {
-        return 0;
-    }
-
-    proc K::get_security_stats() {
-        return 0;
-    }
-
-    proc K::generate_nonce() {
-        return 0;
-    }
-
-    proc K::sign_message() {
-        return 0;
-    }
-
-    proc K::verify_signature() {
-        return 1;
+    proc K::verify_signature(payload: UInt64, signature: UInt64) -> UInt32 {
+        if payload == PAYLOAD_EMPTY {
+            return STATUS_DENIED;
+        } else {
+            if signature == SIGNATURE_INVALID {
+                return STATUS_DENIED;
+            } else {
+                if signature < payload {
+                    return STATUS_DENIED;
+                } else {
+                    return STATUS_OK;
+                }
+            }
+        }
     }
 }

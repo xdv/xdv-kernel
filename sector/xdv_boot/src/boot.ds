@@ -3,18 +3,32 @@ forge XdvBoot {
     const MULTIBOOT2_MAGIC: UInt32 = 911045161;
     const MULTIBOOT2_FLAGS: UInt32 = 3;
 
-    proc K::boot_init() {
-        disable_interrupts();
-        enable_interrupts();
-        emit "XDV Boot: Initialization complete";
-        return 0;
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INTERRUPT_STATE_ERROR: UInt32 = 1;
+
+    const INTERRUPTS_DISABLED: UInt32 = 1;
+    const INTERRUPTS_ENABLED: UInt32 = 0;
+
+    proc K::boot_init() -> UInt32 {
+        let disabled = disable_interrupts();
+        if disabled == INTERRUPTS_DISABLED {
+            let enabled = enable_interrupts();
+            if enabled == INTERRUPTS_ENABLED {
+                emit "XDV Boot: Initialization complete";
+                return STATUS_OK;
+            } else {
+                return STATUS_INTERRUPT_STATE_ERROR;
+            }
+        } else {
+            return STATUS_INTERRUPT_STATE_ERROR;
+        }
     }
 
-    proc K::disable_interrupts() {
-        return 0;
+    proc K::disable_interrupts() -> UInt32 {
+        return INTERRUPTS_DISABLED;
     }
 
-    proc K::enable_interrupts() {
-        return 0;
+    proc K::enable_interrupts() -> UInt32 {
+        return INTERRUPTS_ENABLED;
     }
 }

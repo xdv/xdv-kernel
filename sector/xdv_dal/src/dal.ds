@@ -17,43 +17,91 @@ forge XdvDal {
     const CAP_PHASE_STATE: UInt64 = 64;
     const CAP_TELEMETRY: UInt64 = 128;
 
-    proc K::domain_init_stage1() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INVALID_CAPABILITY: UInt32 = 1;
+    const STATUS_INVALID_DOMAIN: UInt32 = 2;
+
+    proc K::domain_init_stage1() -> UInt32 {
         emit "XDV DAL: Initializing Domain Abstraction Layer";
         emit "XDV DAL: Registering K-Domain capabilities";
         emit "XDV DAL: Q-Domain and Phi-Domain registered";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::get_default_capabilities() {
-        return 0;
+    proc K::get_default_capabilities(domain: UInt8) -> UInt64 {
+        if domain == DOMAIN_K {
+            return CAP_COMPUTE + CAP_MEMORY + CAP_IO + CAP_SCHEDULE + CAP_CROSS_DOMAIN + CAP_TELEMETRY;
+        } else {
+            if domain == DOMAIN_Q {
+                return CAP_COMPUTE + CAP_MEMORY + CAP_CROSS_DOMAIN + CAP_QUANTUM_STATE + CAP_TELEMETRY;
+            } else {
+                if domain == DOMAIN_PHI {
+                    return CAP_COMPUTE + CAP_MEMORY + CAP_CROSS_DOMAIN + CAP_PHASE_STATE + CAP_TELEMETRY;
+                } else {
+                    return CAP_NONE;
+                }
+            }
+        }
     }
 
-    proc K::validate_capabilities() {
-        return 1;
+    proc K::validate_capabilities(domain: UInt8, capabilities: UInt64) -> UInt32 {
+        let default_caps = get_default_capabilities(domain);
+        if default_caps == CAP_NONE {
+            return STATUS_INVALID_DOMAIN;
+        } else {
+            if capabilities > default_caps {
+                return STATUS_INVALID_CAPABILITY;
+            } else {
+                return STATUS_OK;
+            }
+        }
     }
 
-    proc K::create_transfer_contract() {
-        return 0;
+    proc K::create_transfer_contract(source_domain: UInt8, target_domain: UInt8, capabilities: UInt64) -> UInt64 {
+        let source_caps = get_default_capabilities(source_domain);
+        let target_caps = get_default_capabilities(target_domain);
+        if source_caps == CAP_NONE {
+            return CAP_NONE;
+        } else {
+            if target_caps == CAP_NONE {
+                return CAP_NONE;
+            } else {
+                if capabilities == CAP_NONE {
+                    return CAP_NONE;
+                } else {
+                    return capabilities;
+                }
+            }
+        }
     }
 
-    proc K::generate_capability_token() {
-        let seed = 1;
-        return seed;
+    proc K::generate_capability_token(domain: UInt8, capabilities: UInt64) -> UInt64 {
+        return capabilities + domain;
     }
 
-    proc K::validate_transfer_contract() {
-        return 1;
+    proc K::validate_transfer_contract(source_domain: UInt8, target_domain: UInt8, contract_value: UInt64) -> UInt32 {
+        let rebuilt = create_transfer_contract(source_domain, target_domain, contract_value);
+        if rebuilt == CAP_NONE {
+            return STATUS_INVALID_CAPABILITY;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::domain_init() {
-        return 0;
+    proc K::domain_init(domain: UInt8) -> UInt32 {
+        let caps = get_default_capabilities(domain);
+        if caps == CAP_NONE {
+            return STATUS_INVALID_DOMAIN;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::domain_type_name() {
-        return 0;
+    proc K::domain_type_name(domain: UInt8) -> UInt8 {
+        return domain;
     }
 
-    proc K::domain_status_name() {
-        return 0;
+    proc K::domain_status_name(code: UInt32) -> UInt32 {
+        return code;
     }
 }

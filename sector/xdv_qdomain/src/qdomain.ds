@@ -7,72 +7,120 @@ forge XdvQDomain {
     const Q_ERROR_INVALID_QUBIT: UInt32 = 2;
     const Q_ERROR_NO_CAPACITY: UInt32 = 3;
     const Q_ERROR_MEASUREMENT: UInt32 = 4;
+    const Q_ERROR_NOT_AVAILABLE: UInt32 = 100;
 
-    proc K::qdomain_init() {
+    const MAX_QUBITS_WHEN_AVAILABLE: UInt32 = 1024;
+
+    proc K::qdomain_init() -> UInt32 {
         emit "XDV Q-Domain: Initializing quantum subsystem";
-        init_quantum_hardware();
-        init_error_correction();
-        init_quantum_scheduler();
-        emit "XDV Q-Domain: Quantum subsystem initialized";
-        return 0;
+        let hw_status = init_quantum_hardware();
+        if hw_status == Q_ERROR_NONE {
+            init_error_correction();
+            init_quantum_scheduler();
+            emit "XDV Q-Domain: Quantum subsystem initialized";
+            return Q_ERROR_NONE;
+        } else {
+            emit "XDV Q-Domain: hardware unavailable";
+            return Q_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::init_quantum_hardware() {
+    proc K::init_quantum_hardware() -> UInt32 {
         emit "XDV Q-Domain: Initializing quantum hardware interface";
-        return 0;
+        return Q_ERROR_NOT_AVAILABLE;
     }
 
-    proc K::init_error_correction() {
+    proc K::init_error_correction() -> UInt32 {
         emit "XDV Q-Domain: Initializing error correction";
-        return 0;
+        return Q_ERROR_NONE;
     }
 
-    proc K::init_quantum_scheduler() {
+    proc K::init_quantum_scheduler() -> UInt32 {
         emit "XDV Q-Domain: Initializing quantum scheduler";
-        return 0;
+        return Q_ERROR_NONE;
     }
 
-    proc K::alloc_quantum_register() {
-        return 0;
+    proc K::alloc_quantum_register(qubit_count: UInt32) -> UInt32 {
+        if qubit_count == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            if qubit_count > MAX_QUBITS_WHEN_AVAILABLE {
+                return Q_ERROR_NO_CAPACITY;
+            } else {
+                return Q_ERROR_NOT_AVAILABLE;
+            }
+        }
     }
 
-    proc K::free_quantum_register() {
-        return 0;
+    proc K::free_quantum_register(register_id: UInt32) -> UInt32 {
+        if register_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            return Q_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::alloc_qubit() {
-        return 0;
+    proc K::alloc_qubit(register_id: UInt32) -> UInt32 {
+        if register_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            return Q_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::apply_gate() {
-        return 0;
+    proc K::apply_gate(qubit_id: UInt32, gate_id: UInt32) -> UInt32 {
+        if qubit_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            if gate_id == 0 {
+                return Q_ERROR_INVALID_QUBIT;
+            } else {
+                return Q_ERROR_NOT_AVAILABLE;
+            }
+        }
     }
 
-    proc K::measure_qubit() {
-        return 0;
+    proc K::measure_qubit(qubit_id: UInt32) -> UInt32 {
+        if qubit_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            return Q_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::check_coherence() {
-        return 1;
+    proc K::check_coherence(qubit_id: UInt32) -> UInt32 {
+        if qubit_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            return Q_ERROR_DECOHERENCE;
+        }
     }
 
-    proc K::recover_coherence() {
-        return 0;
+    proc K::recover_coherence(qubit_id: UInt32) -> UInt32 {
+        if qubit_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            return Q_ERROR_NOT_AVAILABLE;
+        }
     }
 
-    proc K::get_qerror_metrics() {
-        return 0;
+    proc K::get_qerror_metrics() -> UInt32 {
+        return Q_ERROR_NOT_AVAILABLE;
     }
 
-    proc K::create_quantum_job() {
-        return 0;
+    proc K::create_quantum_job() -> UInt32 {
+        return Q_ERROR_NOT_AVAILABLE;
     }
 
-    proc K::schedule_quantum_job() {
-        return 0;
+    proc K::schedule_quantum_job() -> UInt32 {
+        return Q_ERROR_NOT_AVAILABLE;
     }
 
-    proc K::gate_name() {
-        return 0;
+    proc K::gate_name(gate_id: UInt32) -> UInt32 {
+        if gate_id == 0 {
+            return Q_ERROR_INVALID_QUBIT;
+        } else {
+            return gate_id;
+        }
     }
 }

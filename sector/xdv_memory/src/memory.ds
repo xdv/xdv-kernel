@@ -7,41 +7,56 @@ forge XdvMemory {
     const PTE_WRITABLE: UInt64 = 2;
     const PTE_USER: UInt64 = 4;
 
-    proc K::memory_init() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INIT_ERROR: UInt32 = 1;
+    const STATUS_ALLOC_ERROR: UInt32 = 2;
+    const STATUS_FREE_ERROR: UInt32 = 3;
+
+    const KERNEL_HEAP_BASE: UInt64 = 16777216;
+
+    proc K::memory_init() -> UInt32 {
         emit "XDV Memory: Initializing memory manager";
-        init_buddy_allocator();
-        init_kernel_heap();
-        emit "XDV Memory: Memory manager initialized";
-        return 0;
+        let buddy_status = init_buddy_allocator();
+        if buddy_status == STATUS_OK {
+            let heap_status = init_kernel_heap();
+            if heap_status == STATUS_OK {
+                emit "XDV Memory: Memory manager initialized";
+                return STATUS_OK;
+            } else {
+                return STATUS_INIT_ERROR;
+            }
+        } else {
+            return STATUS_INIT_ERROR;
+        }
     }
 
-    proc K::init_buddy_allocator() {
+    proc K::init_buddy_allocator() -> UInt32 {
         emit "XDV Memory: Initializing buddy allocator";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_kernel_heap() {
+    proc K::init_kernel_heap() -> UInt32 {
         emit "XDV Memory: Initializing kernel heap";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::alloc_physical_page() {
-        return 4096;
+    proc K::alloc_physical_page() -> UInt64 {
+        return PAGE_SIZE;
     }
 
-    proc K::free_physical_page() {
-        return 0;
+    proc K::free_physical_page() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::vmalloc() {
-        return 0;
+    proc K::vmalloc() -> UInt64 {
+        return KERNEL_HEAP_BASE + PAGE_SIZE;
     }
 
-    proc K::vmfree() {
-        return 0;
+    proc K::vmfree() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::mprotect() {
-        return 0;
+    proc K::mprotect() -> UInt32 {
+        return STATUS_OK;
     }
 }

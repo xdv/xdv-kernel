@@ -2,83 +2,100 @@
 
 forge XdvOdt {
 
-    proc K::odt_init() {
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_NO_DATA: UInt32 = 1;
+
+    const TRACE_BUFFER_CAPACITY: UInt32 = 8192;
+
+    proc K::odt_init() -> UInt32 {
         emit "XDV ODT: Initializing observability and trace layer";
         init_trace_system();
         init_telemetry_collectors();
         init_diagnostics();
         emit "XDV ODT: Observability and trace layer initialized";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_trace_system() {
+    proc K::init_trace_system() -> UInt32 {
         emit "XDV ODT: Initializing trace system";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_telemetry_collectors() {
+    proc K::init_telemetry_collectors() -> UInt32 {
         emit "XDV ODT: Initializing telemetry collectors";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::init_diagnostics() {
+    proc K::init_diagnostics() -> UInt32 {
         emit "XDV ODT: Initializing diagnostics";
-        return 0;
+        return STATUS_OK;
     }
 
-    proc K::log_trace_event() {
-        return 0;
+    proc K::log_trace_event(event_code: UInt32) -> UInt32 {
+        if event_code == 0 {
+            return STATUS_NO_DATA;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::log_domain_transition() {
-        return 0;
+    proc K::log_domain_transition(source_domain: UInt8, target_domain: UInt8) -> UInt32 {
+        if source_domain == target_domain {
+            return STATUS_NO_DATA;
+        } else {
+            return STATUS_OK;
+        }
     }
 
-    proc K::collect_k_telemetry() {
-        return 0;
+    proc K::collect_k_telemetry() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::collect_q_telemetry() {
-        return 0;
+    proc K::collect_q_telemetry() -> UInt32 {
+        return STATUS_NO_DATA;
     }
 
-    proc K::collect_phi_telemetry() {
-        return 0;
+    proc K::collect_phi_telemetry() -> UInt32 {
+        return STATUS_NO_DATA;
     }
 
-    proc K::get_q_diagnostics() {
-        return 0;
+    proc K::get_q_diagnostics() -> UInt32 {
+        return STATUS_NO_DATA;
     }
 
-    proc K::get_phi_diagnostics() {
-        return 0;
+    proc K::get_phi_diagnostics() -> UInt32 {
+        return STATUS_NO_DATA;
     }
 
-    proc K::get_system_health() {
-        return 0;
+    proc K::get_system_health() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::get_trace_stats() {
-        return 0;
+    proc K::get_trace_stats() -> UInt32 {
+        return TRACE_BUFFER_CAPACITY;
     }
 
-    proc K::query_trace_events() {
-        return 0;
+    proc K::query_trace_events() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::get_transition_history() {
-        return 0;
+    proc K::get_transition_history() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::export_trace_data() {
-        return 0;
+    proc K::export_trace_data() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::clear_trace_buffer() {
-        return 0;
+    proc K::clear_trace_buffer() -> UInt32 {
+        return STATUS_OK;
     }
 
-    proc K::set_telemetry_interval() {
-        return 0;
+    proc K::set_telemetry_interval(ms: UInt32) -> UInt32 {
+        if ms == 0 {
+            return STATUS_NO_DATA;
+        } else {
+            return STATUS_OK;
+        }
     }
 }
