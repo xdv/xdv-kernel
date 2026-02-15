@@ -22,6 +22,8 @@ forge XdvKernel {
     // codegen-safe boot path used by xdv-os image build.
     proc K::kernel_start() -> UInt32 {
         emit "XDV Kernel starting...";
+        xdv_os_boot_contract();
+        emit "XDV Kernel: received loader handoff";
         init_kernel_boot();
         load_runtime_boot();
         start_runtime_boot();

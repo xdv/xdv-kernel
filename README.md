@@ -2,6 +2,10 @@
 
 A Cross-Domain Virtualizer operating system kernel for x86-64, written entirely in the Dust Programming Language (DPL).
 
+For `xdv-os` bare-metal image boot/runtime, the kernel sector also provides
+`sector/xdv_kernel/src/kernel_runtime_shell.asm`, which implements the runtime
+keyboard (US layout), command buffer, and builtin shell dispatch profile used by VirtualBox validation.
+
 ## Overview
 
 XDV v0.2 is a multi-domain operating system kernel that supports three computational domains:
@@ -59,6 +63,7 @@ xdv-kernel/
 │   │   └── drivers_tests.ds
 │   ├── xdv_kernel/      # Core kernel
 │   │   ├── kernel.ds
+│   │   ├── kernel_runtime_shell.asm
 │   │   └── kernel_tests.ds
 │   ├── xdv_dal/         # Domain Abstraction Layer
 │   │   ├── dal.ds
