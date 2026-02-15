@@ -8,8 +8,9 @@ forge XdvKernel {
     proc K::kernel_start() {
         emit "XDV Kernel starting...";
         init_kernel();
+        load_runtime();
+        start_runtime();
         kernel_main();
-        emit "XDV Kernel halted unexpectedly";
         return 0;
     }
 
@@ -45,6 +46,19 @@ forge XdvKernel {
         return 0;
     }
 
+    proc K::load_runtime() {
+        emit "XDV Kernel: loading xdv-runtime";
+        init();
+        return 0;
+    }
+
+    proc K::start_runtime() {
+        emit "XDV Kernel: starting xdv-runtime";
+        start_userspace();
+        emit "XDV Kernel: xdv-runtime online";
+        return 0;
+    }
+
     proc K::handle_tick() {
         return 0;
     }
@@ -77,4 +91,8 @@ forge XdvKernel {
     proc K::get_process_count() {
         return 0;
     }
+}
+
+K main {
+    kernel_start();
 }
