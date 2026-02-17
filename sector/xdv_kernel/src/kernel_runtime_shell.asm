@@ -713,6 +713,7 @@ dispatch:
     mov al, [esi]
     test al, al
     jz .ret
+    call capture_runtime_sample
 
     mov esi, cmd_help
     call cmd_equals
@@ -1275,37 +1276,455 @@ do_edx:
     call print_line
     ret
 
+; xdv-core runtime helpers
+str_len:
+    xor eax, eax
+.loop:
+    cmp byte [esi + eax], 0
+    je .done
+    inc eax
+    jmp .loop
+.done:
+    ret
+
+print_u32:
+    push ebx
+    push ecx
+    push edx
+    cmp eax, 0
+    jne .convert
+    mov al, '0'
+    call putc
+    jmp .done
+.convert:
+    xor ecx, ecx
+    mov ebx, 10
+.push_digits:
+    xor edx, edx
+    div ebx
+    add dl, '0'
+    push edx
+    inc ecx
+    test eax, eax
+    jnz .push_digits
+.emit_digits:
+    pop eax
+    call putc
+    dec ecx
+    jnz .emit_digits
+.done:
+    pop edx
+    pop ecx
+    pop ebx
+    ret
+
+print_label_u32:
+    push eax
+    call puts
+    pop eax
+    call print_u32
+    call newline
+    ret
+
+count_custom_entries:
+    push ebx
+    xor eax, eax
+    xor ebx, ebx
+.scan:
+    cmp ebx, CUSTOM_MAX
+    jae .done
+    cmp byte [custom_used + ebx], 1
+    jne .next
+    inc eax
+.next:
+    inc ebx
+    jmp .scan
+.done:
+    pop ebx
+    ret
+
+count_custom_dirs:
+    push ebx
+    xor eax, eax
+    xor ebx, ebx
+.scan:
+    cmp ebx, CUSTOM_MAX
+    jae .done
+    cmp byte [custom_used + ebx], 1
+    jne .next
+    cmp byte [custom_type + ebx], ENTRY_DIR
+    jne .next
+    inc eax
+.next:
+    inc ebx
+    jmp .scan
+.done:
+    pop ebx
+    ret
+
+count_custom_files:
+    push ebx
+    xor eax, eax
+    xor ebx, ebx
+.scan:
+    cmp ebx, CUSTOM_MAX
+    jae .done
+    cmp byte [custom_used + ebx], 1
+    jne .next
+    cmp byte [custom_type + ebx], ENTRY_FILE
+    jne .next
+    inc eax
+.next:
+    inc ebx
+    jmp .scan
+.done:
+    pop ebx
+    ret
+
+get_cursor_row_col:
+    push ecx
+    push edx
+    mov eax, [cursor]
+    sub eax, VGA_BASE
+    xor edx, edx
+    mov ecx, 160
+    div ecx
+    mov ebx, edx
+    shr ebx, 1
+    pop edx
+    pop ecx
+    ret
+
+capture_runtime_sample:
+    inc dword [runtime_ticks]
+    inc dword [commands_executed]
+
+    mov esi, [cmd_ptr]
+    mov edi, last_cmd_buf
+    mov ecx, NAME_MAX - 1
+.copy_cmd:
+    mov al, [esi]
+    mov [edi], al
+    test al, al
+    jz .copy_done
+    inc esi
+    inc edi
+    dec ecx
+    jnz .copy_cmd
+    mov byte [edi], 0
+.copy_done:
+    mov esi, last_cmd_buf
+    call str_len
+    mov [last_cmd_len], eax
+
+    mov esi, [arg_ptr]
+    call str_len
+    mov [last_arg_len], eax
+    ret
+
 ; xdv-core
-core_console:       mov esi, msg_core_console       ; fallthrough print
-    jmp print_line
-core_init:          mov esi, msg_core_init
-    jmp print_line
-core_io:            mov esi, msg_core_io
-    jmp print_line
-core_memory:        mov esi, msg_core_memory
-    jmp print_line
-core_process:       mov esi, msg_core_process
-    jmp print_line
-core_scheduler:     mov esi, msg_core_scheduler
-    jmp print_line
-core_strings:       mov esi, msg_core_strings
-    jmp print_line
-core_runtime_admin: mov esi, msg_core_runtime_admin
-    jmp print_line
-core_sysmon:        mov esi, msg_core_sysmon
-    jmp print_line
-core_service:       mov esi, msg_core_service
-    jmp print_line
-core_log:           mov esi, msg_core_log
-    jmp print_line
-core_storage:       mov esi, msg_core_storage
-    jmp print_line
-core_security:      mov esi, msg_core_security
-    jmp print_line
-core_recovery:      mov esi, msg_core_recovery
-    jmp print_line
-core_cli:           mov esi, msg_core_cli
-    jmp print_line
+core_console:
+    mov esi, msg_core_console
+    call print_line
+
+    call get_cursor_row_col
+    push ebx
+    mov esi, msg_metric_cursor_row
+    call puts
+    call print_u32
+    mov al, ' '
+    call putc
+    mov esi, msg_metric_cursor_col
+    call puts
+    pop eax
+    call print_u32
+    call newline
+
+    movzx eax, byte [kb_shift]
+    mov esi, msg_metric_kb_shift
+    call print_label_u32
+    movzx eax, byte [kb_caps]
+    mov esi, msg_metric_kb_caps
+    call print_label_u32
+    ret
+
+core_init:
+    mov esi, msg_core_init
+    call print_line
+    mov eax, [runtime_ticks]
+    mov esi, msg_metric_boot_ticks
+    call print_label_u32
+    mov eax, [commands_executed]
+    mov esi, msg_metric_commands
+    call print_label_u32
+    ret
+
+core_io:
+    mov esi, msg_core_io
+    call print_line
+    mov esi, msg_metric_last_cmd
+    call puts
+    mov esi, last_cmd_buf
+    call print_line
+    mov eax, [last_arg_len]
+    mov esi, msg_metric_last_arg_len
+    call print_label_u32
+    call count_custom_files
+    mov esi, msg_metric_io_file_entries
+    call print_label_u32
+    ret
+
+core_memory:
+    mov esi, msg_core_memory
+    call print_line
+    mov eax, [line_len]
+    mov esi, msg_metric_line_len
+    call print_label_u32
+    call count_custom_entries
+    mov [metric_tmp], eax
+    mov esi, msg_metric_heap_used
+    call print_label_u32
+    mov eax, CUSTOM_MAX
+    sub eax, [metric_tmp]
+    mov esi, msg_metric_heap_free
+    call print_label_u32
+    ret
+
+core_process:
+    mov esi, msg_core_process
+    call print_line
+    mov eax, 1
+    mov esi, msg_metric_pid
+    call print_label_u32
+    mov eax, [commands_executed]
+    mov esi, msg_metric_context_switches
+    call print_label_u32
+    ret
+
+core_scheduler:
+    mov esi, msg_core_scheduler
+    call print_line
+    call arg_to_token
+    mov esi, token_buf
+    mov al, [esi]
+    test al, al
+    jz .report
+    mov edi, arg_start
+    call str_equals_ci
+    test eax, eax
+    jz .check_stop
+    mov byte [scheduler_running], 1
+    jmp .report
+.check_stop:
+    mov esi, token_buf
+    mov edi, arg_stop
+    call str_equals_ci
+    test eax, eax
+    jz .check_tick
+    mov byte [scheduler_running], 0
+    jmp .report
+.check_tick:
+    mov esi, token_buf
+    mov edi, arg_tick
+    call str_equals_ci
+    test eax, eax
+    jz .report
+    inc dword [runtime_ticks]
+.report:
+    movzx eax, byte [scheduler_running]
+    mov esi, msg_metric_scheduler_running
+    call print_label_u32
+    mov eax, [runtime_ticks]
+    mov esi, msg_metric_scheduler_ticks
+    call print_label_u32
+    ret
+
+core_strings:
+    mov esi, msg_core_strings
+    call print_line
+    mov eax, [last_cmd_len]
+    mov esi, msg_metric_last_cmd_len
+    call print_label_u32
+    mov eax, [last_arg_len]
+    mov esi, msg_metric_last_arg_len
+    call print_label_u32
+    ret
+
+core_runtime_admin:
+    mov esi, msg_core_runtime_admin
+    call print_line
+    call get_cursor_row_col
+    mov ecx, eax
+    mov edx, ebx
+    mov eax, 1
+    cmp ecx, 25
+    jae .console_done
+    cmp edx, 80
+    jae .console_done
+    xor eax, eax
+.console_done:
+    mov esi, msg_metric_console_status
+    call print_label_u32
+    movzx eax, byte [scheduler_running]
+    mov esi, msg_metric_scheduler_running
+    call print_label_u32
+    call count_custom_entries
+    mov esi, msg_metric_resource_entries
+    call print_label_u32
+    ret
+
+core_sysmon:
+    mov esi, msg_core_sysmon
+    call print_line
+    mov eax, [runtime_ticks]
+    mov esi, msg_metric_uptime_ticks
+    call print_label_u32
+    mov eax, [commands_executed]
+    mov esi, msg_metric_commands
+    call print_label_u32
+    movzx eax, byte [kb_shift]
+    mov esi, msg_metric_kb_shift
+    call print_label_u32
+    movzx eax, byte [kb_ctrl]
+    mov esi, msg_metric_kb_ctrl
+    call print_label_u32
+    ret
+
+core_service:
+    mov esi, msg_core_service
+    call print_line
+    call count_custom_dirs
+    mov esi, msg_metric_service_slots
+    call print_label_u32
+    movzx eax, byte [scheduler_running]
+    mov esi, msg_metric_scheduler_running
+    call print_label_u32
+    ret
+
+core_log:
+    mov esi, msg_core_log
+    call print_line
+    mov eax, [commands_executed]
+    mov esi, msg_metric_log_entries
+    call print_label_u32
+    mov esi, msg_metric_last_cmd
+    call puts
+    mov esi, last_cmd_buf
+    call print_line
+    ret
+
+core_storage:
+    mov esi, msg_core_storage
+    call print_line
+    mov eax, 2048
+    mov esi, msg_metric_xdvfs_part_lba
+    call print_label_u32
+    mov eax, 32
+    mov esi, msg_metric_xdvfs_kernel_lba
+    call print_label_u32
+    call count_custom_files
+    mov [metric_tmp], eax
+    call count_custom_dirs
+    mov esi, msg_metric_storage_dirs
+    call print_label_u32
+    mov eax, [metric_tmp]
+    mov esi, msg_metric_storage_files
+    call print_label_u32
+    ret
+
+core_security:
+    mov esi, msg_core_security
+    call print_line
+    call arg_to_token
+    mov esi, token_buf
+    mov al, [esi]
+    test al, al
+    jz .report
+    mov edi, arg_lockdown
+    call str_equals_ci
+    test eax, eax
+    jz .check_restore
+    mov byte [security_lockdown], 1
+    jmp .report
+.check_restore:
+    mov esi, token_buf
+    mov edi, arg_restore
+    call str_equals_ci
+    test eax, eax
+    jz .report
+    mov byte [security_lockdown], 0
+.report:
+    movzx eax, byte [security_lockdown]
+    mov esi, msg_metric_lockdown
+    call print_label_u32
+    movzx eax, byte [kb_ctrl]
+    mov esi, msg_metric_kb_ctrl
+    call print_label_u32
+    movzx eax, byte [kb_alt]
+    mov esi, msg_metric_kb_alt
+    call print_label_u32
+    ret
+
+core_recovery:
+    inc dword [recovery_runs]
+    mov esi, msg_core_recovery
+    call print_line
+    mov eax, [recovery_runs]
+    mov esi, msg_metric_recovery_runs
+    call print_label_u32
+    call count_custom_entries
+    mov esi, msg_metric_resource_entries
+    call print_label_u32
+    movzx eax, byte [security_lockdown]
+    mov esi, msg_metric_lockdown
+    call print_label_u32
+    ret
+
+core_cli:
+    mov esi, msg_core_cli
+    call print_line
+    call arg_to_token
+    mov esi, token_buf
+    mov al, [esi]
+    test al, al
+    jz .show
+    mov edi, arg_minimum
+    call str_equals_ci
+    test eax, eax
+    jz .check_admin
+    mov byte [cli_profile], 1
+    jmp .show
+.check_admin:
+    mov esi, token_buf
+    mov edi, arg_admin
+    call str_equals_ci
+    test eax, eax
+    jz .check_recovery
+    mov byte [cli_profile], 2
+    jmp .show
+.check_recovery:
+    mov esi, token_buf
+    mov edi, arg_recovery
+    call str_equals_ci
+    test eax, eax
+    jz .check_all
+    mov byte [cli_profile], 3
+    jmp .show
+.check_all:
+    mov esi, token_buf
+    mov edi, arg_all
+    call str_equals_ci
+    test eax, eax
+    jz .show
+    mov byte [cli_profile], 4
+.show:
+    movzx eax, byte [cli_profile]
+    mov esi, msg_metric_cli_profile
+    call print_label_u32
+    mov eax, [commands_executed]
+    mov esi, msg_metric_commands
+    call print_label_u32
+    ret
 
 ; xdv-xdvfs-utils
 utils_probe:        mov esi, msg_utils_probe
@@ -1382,6 +1801,19 @@ custom_names     times (CUSTOM_MAX * NAME_MAX) db 0
 create_name_ptr  dd token_buf
 create_type_tmp  db 0
 
+runtime_ticks    dd 0
+commands_executed dd 0
+last_cmd_len     dd 0
+last_arg_len     dd 0
+recovery_runs    dd 0
+metric_tmp       dd 0
+
+scheduler_running db 1
+security_lockdown db 0
+cli_profile      db 1
+
+last_cmd_buf     times NAME_MAX db 0
+
 kb_shift         db 0
 kb_caps          db 0
 kb_ctrl          db 0
@@ -1454,6 +1886,16 @@ cmd_mount        db 'mount',0
 cmd_space        db 'space',0
 cmd_perm         db 'perm',0
 
+arg_start        db 'start',0
+arg_stop         db 'stop',0
+arg_tick         db 'tick',0
+arg_lockdown     db 'lockdown',0
+arg_restore      db 'restore',0
+arg_minimum      db 'minimum',0
+arg_admin        db 'admin',0
+arg_recovery     db 'recovery',0
+arg_all          db 'all',0
+
 name_xdv_core    db 'xdv-core',0
 name_xdv_utils   db 'xdv-xdvfs-utils',0
 name_xdv_shell   db 'xdv-shell',0
@@ -1515,21 +1957,53 @@ msg_edx_readme     db 'edx editor module',0
 msg_core_cmds      db 'console init io memory process scheduler strings runtime-admin sysmon service log storage security recovery cli',0
 msg_utils_cmds     db 'probe partition mkfs fsck dir file mount space perm',0
 
-msg_core_console       db 'xdv-core.console: operational',0
-msg_core_init          db 'xdv-core.init: operational',0
-msg_core_io            db 'xdv-core.io: operational',0
-msg_core_memory        db 'xdv-core.memory: operational',0
-msg_core_process       db 'xdv-core.process: operational',0
-msg_core_scheduler     db 'xdv-core.scheduler: operational',0
-msg_core_strings       db 'xdv-core.strings: operational',0
-msg_core_runtime_admin db 'xdv-core.runtime-admin: operational',0
-msg_core_sysmon        db 'xdv-core.sysmon: operational',0
-msg_core_service       db 'xdv-core.service: operational',0
-msg_core_log           db 'xdv-core.log: operational',0
-msg_core_storage       db 'xdv-core.storage: operational',0
-msg_core_security      db 'xdv-core.security: operational',0
-msg_core_recovery      db 'xdv-core.recovery: operational',0
-msg_core_cli           db 'xdv-core.cli: operational',0
+msg_core_console       db 'xdv-core.console: status clear theme cursor key write',0
+msg_core_init          db 'xdv-core.init: status bootstrap spawn-shell wait reap shutdown reload',0
+msg_core_io            db 'xdv-core.io: open-read open-write open-append read write close',0
+msg_core_memory        db 'xdv-core.memory: diag alloc zero-alloc free copy set',0
+msg_core_process       db 'xdv-core.process: current-pid spawn spawn-stack join kill sleep yield',0
+msg_core_scheduler     db 'xdv-core.scheduler: status start stop add remove priority tick',0
+msg_core_strings       db 'xdv-core.strings: len compare find concat substring upper lower',0
+msg_core_runtime_admin db 'xdv-core.runtime-admin: minimum-set admin-set full-cycle',0
+msg_core_sysmon        db 'xdv-core.sysmon: snapshot runtime-health io-sample storage-sample',0
+msg_core_service       db 'xdv-core.service: status start start-priority stop restart reload',0
+msg_core_log           db 'xdv-core.log: status open write read close emit-console',0
+msg_core_storage       db 'xdv-core.storage: status partition mkfs fsck mount unmount df dir touch',0
+msg_core_security      db 'xdv-core.security: status chmod chown chgrp lockdown restore',0
+msg_core_recovery      db 'xdv-core.recovery: diagnostics safe-mode repair reload-runtime',0
+msg_core_cli           db 'xdv-core.cli: minimum admin recovery all profile',0
+
+msg_metric_cursor_row         db 'cursor-row=',0
+msg_metric_cursor_col         db 'cursor-col=',0
+msg_metric_kb_shift           db 'kb-shift=',0
+msg_metric_kb_caps            db 'kb-caps=',0
+msg_metric_kb_ctrl            db 'kb-ctrl=',0
+msg_metric_kb_alt             db 'kb-alt=',0
+msg_metric_boot_ticks         db 'boot-ticks=',0
+msg_metric_uptime_ticks       db 'uptime-ticks=',0
+msg_metric_commands           db 'commands=',0
+msg_metric_last_cmd           db 'last-cmd=',0
+msg_metric_last_cmd_len       db 'last-cmd-len=',0
+msg_metric_last_arg_len       db 'last-arg-len=',0
+msg_metric_io_file_entries    db 'io-file-entries=',0
+msg_metric_line_len           db 'line-len=',0
+msg_metric_heap_used          db 'heap-used-slots=',0
+msg_metric_heap_free          db 'heap-free-slots=',0
+msg_metric_pid                db 'pid=',0
+msg_metric_context_switches   db 'context-switches=',0
+msg_metric_scheduler_running  db 'scheduler-running=',0
+msg_metric_scheduler_ticks    db 'scheduler-ticks=',0
+msg_metric_console_status     db 'console-status=',0
+msg_metric_resource_entries   db 'resource-entries=',0
+msg_metric_service_slots      db 'service-slots=',0
+msg_metric_log_entries        db 'log-entries=',0
+msg_metric_xdvfs_part_lba     db 'xdvfs-partition-lba=',0
+msg_metric_xdvfs_kernel_lba   db 'xdv-kernel-rel-lba=',0
+msg_metric_storage_dirs       db 'storage-dir-entries=',0
+msg_metric_storage_files      db 'storage-file-entries=',0
+msg_metric_lockdown           db 'lockdown=',0
+msg_metric_recovery_runs      db 'recovery-runs=',0
+msg_metric_cli_profile        db 'cli-profile=',0
 
 msg_utils_probe       db 'xdvfs-utils.probe: operational',0
 msg_utils_partition   db 'xdvfs-utils.partition: operational',0
