@@ -5,6 +5,22 @@ All notable changes to the XDV Kernel are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-02-20
+
+### Added
+
+- Added `docs/` documentation set:
+  - `docs/README.md`
+  - `docs/boot_runtime_flow.md`
+  - `docs/sector_reference.md`
+
+### Changed
+
+- Refreshed `README.md` to align with current repository behavior:
+  - clarified kernel runtime entry profiles (`kernel.ds` and `kernel_runtime_shell.asm`),
+  - clarified integration contract with `xdv-boot` and `xdv-os`,
+  - updated documentation and related-project references.
+
 ## [0.2.0] - 2026-02-12 (DPL v0.2)
 
 ### Added
