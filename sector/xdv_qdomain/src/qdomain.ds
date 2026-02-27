@@ -1,4 +1,7 @@
-// XDV Kernel - Q-Domain (Quantum) Subsystem
+// File: qdomain.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - Q-Domain (Quantum) Subsystem
 
 forge XdvQDomain {
 

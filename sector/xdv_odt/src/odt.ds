@@ -1,4 +1,7 @@
-// XDV Kernel - Observability & Deterministic Trace Layer (ODT)
+// File: odt.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - Observability & Deterministic Trace Layer (ODT)
 
 forge XdvOdt {
 

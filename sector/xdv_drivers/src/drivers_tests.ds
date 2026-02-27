@@ -1,4 +1,7 @@
-// XDV Kernel - Drivers Sector Tests
+// File: drivers_tests.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - Drivers Sector Tests
 
 forge DriversTests {
 

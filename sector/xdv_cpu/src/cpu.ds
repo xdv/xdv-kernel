@@ -1,3 +1,8 @@
+// File: cpu.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - CPU Management and Control
+
 forge XdvCpu {
 
     const EXCEPTION_DE: UInt8 = 0;

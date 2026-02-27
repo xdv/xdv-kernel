@@ -1,4 +1,7 @@
-// XDV Kernel - Unified Memory Fabric (UMF)
+// File: umf.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - Unified Memory Fabric (UMF)
 
 forge XdvUmf {
 

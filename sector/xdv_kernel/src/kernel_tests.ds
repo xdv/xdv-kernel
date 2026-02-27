@@ -1,4 +1,7 @@
-// XDV Kernel - Main Kernel Sector Tests
+// File: kernel_tests.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - Main Kernel Sector Tests
 
 forge KernelTests {
 

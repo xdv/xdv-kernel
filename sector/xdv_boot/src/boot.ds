@@ -1,3 +1,8 @@
+// File: boot.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - Boot and Multiboot2 Support
+
 forge XdvBoot {
 
     const MULTIBOOT2_MAGIC: UInt32 = 911045161;

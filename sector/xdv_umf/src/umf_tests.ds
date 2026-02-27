@@ -1,4 +1,7 @@
-// XDV Kernel - UMF Tests
+// File: umf_tests.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - UMF Tests
 
 forge UmfTests {
 

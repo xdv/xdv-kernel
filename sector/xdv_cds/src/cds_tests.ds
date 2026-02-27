@@ -1,4 +1,7 @@
-// XDV Kernel - CDS Tests
+// File: cds_tests.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   XDV Kernel - CDS Tests
 
 forge CdsTests {
 
