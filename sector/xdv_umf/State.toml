@@ -1,8 +1,1 @@
-# XDV Kernel Sector Manifest
-
-[sector]
-name = "xdv_umf"
-version = "0.2.0"
-description = "XDV Unified Memory Fabric - Domain-aware memory management"
-
-[dependencies]
+﻿# Retired local sector manifest. Canonical project: ../xdv-umf

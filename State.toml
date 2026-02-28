@@ -6,6 +6,13 @@ name = "xdv"
 version = "0.2.0"
 description = "XDV Kernel - A Dust Programming Language operating system for x64"
 
+[workspace.sectors]
+xdv_dal = "../xdv-dal"
+xdv_cds = "../xdv-cds"
+xdv_umf = "../xdv-umf"
+xdv_hypervisor = "../xdv-hypervisor"
+xdv_sdbm = "../xdv-sdbm"
+
 [[sector]]
 name = "xdv_boot"
 path = "sector/xdv_boot"
@@ -27,32 +34,12 @@ name = "xdv_kernel"
 path = "sector/xdv_kernel"
 
 [[sector]]
-name = "xdv_dal"
-path = "sector/xdv_dal"
-
-[[sector]]
 name = "xdv_qdomain"
 path = "sector/xdv_qdomain"
 
 [[sector]]
 name = "xdv_phidomain"
 path = "sector/xdv_phidomain"
-
-[[sector]]
-name = "xdv_cds"
-path = "sector/xdv_cds"
-
-[[sector]]
-name = "xdv_umf"
-path = "sector/xdv_umf"
-
-[[sector]]
-name = "xdv_hypervisor"
-path = "sector/xdv_hypervisor"
-
-[[sector]]
-name = "xdv_sdbm"
-path = "sector/xdv_sdbm"
 
 [[sector]]
 name = "xdv_odt"

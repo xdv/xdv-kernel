@@ -53,6 +53,11 @@ Recommended checks:
 dust check sector/xdv_kernel/src
 dust check sector/xdv_memory/src
 dust check sector/xdv_cpu/src
+dust check ../xdv-dal/src
+dust check ../xdv-cds/src
+dust check ../xdv-umf/src
+dust check ../xdv-hypervisor/src
+dust check ../xdv-sdbm/src
 ```
 
 and integration boot validation through the `xdv-os` build and VM run path.

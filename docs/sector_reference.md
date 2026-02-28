@@ -22,22 +22,28 @@ The kernel workspace is split into sectors under `sector/`.
 
 ## Cross-domain sectors
 
-- `sector/xdv_dal/src/dal.ds`
-  - domain abstraction layer.
 - `sector/xdv_qdomain/src/qdomain.ds`
   - Q-Domain model and hardware-gated interfaces.
 - `sector/xdv_phidomain/src/phidomain.ds`
   - Phi-Domain model and hardware-gated interfaces.
-- `sector/xdv_cds/src/cds.ds`
-  - cross-domain scheduler model.
-- `sector/xdv_umf/src/umf.ds`
-  - unified memory fabric model.
-- `sector/xdv_hypervisor/src/hypervisor.ds`
-  - domain hypervisor model.
-- `sector/xdv_sdbm/src/sdbm.ds`
-  - secure domain boundary management model.
 - `sector/xdv_odt/src/odt.ds`
   - observability and deterministic trace model.
+
+## Standalone split dependencies
+
+The following subsystems were split out of `xdv-kernel/sector/*` and are now
+consumed as standalone `xdv-*` projects:
+
+- `../xdv-dal/src/dal.ds`
+  - domain abstraction layer.
+- `../xdv-cds/src/cds.ds`
+  - cross-domain scheduler model.
+- `../xdv-umf/src/umf.ds`
+  - unified memory fabric model.
+- `../xdv-hypervisor/src/hypervisor.ds`
+  - domain hypervisor model.
+- `../xdv-sdbm/src/sdbm.ds`
+  - secure domain boundary management model.
 
 ## Tests
 

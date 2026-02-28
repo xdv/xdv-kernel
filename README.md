@@ -28,23 +28,27 @@ to report domain-not-available behavior.
 
 ## Sectors
 
-The workspace defines 13 sectors:
+The workspace defines 8 in-repo sectors:
 
 - `xdv_boot`
 - `xdv_memory`
 - `xdv_cpu`
 - `xdv_drivers`
 - `xdv_kernel`
-- `xdv_dal`
 - `xdv_qdomain`
 - `xdv_phidomain`
-- `xdv_cds`
-- `xdv_umf`
-- `xdv_hypervisor`
-- `xdv_sdbm`
 - `xdv_odt`
 
 Each sector contains `src/*.ds` and sector tests (`*_tests.ds`).
+
+The workspace also consumes 5 standalone split projects through
+`[workspace.sectors]` dependencies:
+
+- `../xdv-dal`
+- `../xdv-cds`
+- `../xdv-umf`
+- `../xdv-hypervisor`
+- `../xdv-sdbm`
 
 ## Build and Validation
 
@@ -56,14 +60,14 @@ dust check sector/xdv_memory/src
 dust check sector/xdv_cpu/src
 dust check sector/xdv_drivers/src
 dust check sector/xdv_kernel/src
-dust check sector/xdv_dal/src
 dust check sector/xdv_qdomain/src
 dust check sector/xdv_phidomain/src
-dust check sector/xdv_cds/src
-dust check sector/xdv_umf/src
-dust check sector/xdv_hypervisor/src
-dust check sector/xdv_sdbm/src
 dust check sector/xdv_odt/src
+dust check ../xdv-dal/src
+dust check ../xdv-cds/src
+dust check ../xdv-umf/src
+dust check ../xdv-hypervisor/src
+dust check ../xdv-sdbm/src
 ```
 
 ## Integration Notes
@@ -88,6 +92,11 @@ dust check sector/xdv_odt/src
 - [xdv-boot](../xdv-boot)
 - [xdv-runtime](../xdv-runtime)
 - [xdv-xdvfs](../xdv-xdvfs)
+- [xdv-dal](../xdv-dal)
+- [xdv-cds](../xdv-cds)
+- [xdv-umf](../xdv-umf)
+- [xdv-hypervisor](../xdv-hypervisor)
+- [xdv-sdbm](../xdv-sdbm)
 
 ## License
 

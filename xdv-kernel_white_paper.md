@@ -53,21 +53,25 @@ The stage-0 contract is strict: stage-0 does not preload or call the kernel dire
 
 ## 4. Workspace and Sector Architecture
 
-`xdv-kernel` is a workspace manifest (`State.toml`) with 13 sectors:
+`xdv-kernel` is a workspace manifest (`State.toml`) with 8 in-repo sectors and
+5 standalone split dependencies.
 
 1. `xdv_boot` - boot and early initialization contracts.
 2. `xdv_memory` - memory manager contracts and allocation primitives.
 3. `xdv_cpu` - CPU setup, control register access, and interrupt-state routines.
 4. `xdv_drivers` - VGA/keyboard/serial driver contracts.
 5. `xdv_kernel` - core kernel entry and runtime handoff sequence.
-6. `xdv_dal` - domain abstraction layer and capability contracts.
-7. `xdv_qdomain` - quantum domain subsystem (hardware-gated).
-8. `xdv_phidomain` - phase-native subsystem (hardware-gated).
-9. `xdv_cds` - cross-domain scheduling contracts.
-10. `xdv_umf` - unified memory fabric contracts.
-11. `xdv_hypervisor` - domain virtualization controls.
-12. `xdv_sdbm` - secure domain boundary manager.
-13. `xdv_odt` - observability and deterministic trace layer.
+6. `xdv_qdomain` - quantum domain subsystem (hardware-gated).
+7. `xdv_phidomain` - phase-native subsystem (hardware-gated).
+8. `xdv_odt` - observability and deterministic trace layer.
+
+Standalone split dependencies consumed via `workspace.sectors`:
+
+- `xdv-dal` - domain abstraction layer and capability contracts.
+- `xdv-cds` - cross-domain scheduling contracts.
+- `xdv-umf` - unified memory fabric contracts.
+- `xdv-hypervisor` - domain virtualization controls.
+- `xdv-sdbm` - secure domain boundary manager.
 
 Target profile:
 
@@ -217,7 +221,7 @@ These routines provide deterministic return/status behavior for boot/runtime seq
 
 ### 11.1 DAL (Domain Abstraction Layer)
 
-`xdv_dal` defines:
+`xdv-dal` defines:
 
 - domain IDs (`K=0`, `Q=1`, `PHI=2`),
 - capability masks for compute, memory, IO, scheduling, transfer, telemetry,
@@ -226,7 +230,7 @@ These routines provide deterministic return/status behavior for boot/runtime seq
 
 ### 11.2 CDS (Cross-Domain Scheduler)
 
-`xdv_cds` provides:
+`xdv-cds` provides:
 
 - policy identifiers (round-robin, priority, EDF, coherence-aware, domain-fair),
 - scheduler init and tick orchestration,
@@ -239,7 +243,7 @@ In current implementation, K-domain scheduling paths are active; Q/Phi schedulin
 
 ### 12.1 Hypervisor Sector
 
-`xdv_hypervisor` provides VM lifecycle contracts:
+`xdv-hypervisor` provides VM lifecycle contracts:
 
 - create/configure/start/pause/resume/destroy,
 - vCPU/vQPU/vPhiPU configuration,
@@ -248,7 +252,7 @@ In current implementation, K-domain scheduling paths are active; Q/Phi schedulin
 
 ### 12.2 SDBM Sector
 
-`xdv_sdbm` provides security boundary contracts:
+`xdv-sdbm` provides security boundary contracts:
 
 - capability creation/verification,
 - permission checks,

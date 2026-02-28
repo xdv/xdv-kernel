@@ -1,8 +1,1 @@
-# XDV Kernel Sector Manifest
-
-[sector]
-name = "xdv_hypervisor"
-version = "0.2.0"
-description = "XDV Domain Hypervisor - Virtual domain resources"
-
-[dependencies]
+﻿# Retired local sector manifest. Canonical project: ../xdv-hypervisor
