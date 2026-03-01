@@ -3,32 +3,29 @@
 Version: 0.2.x  
 Language: Dust Programming Language (DPL)
 
-The XDV kernel is the x64 kernel component for XDV OS. It provides the
-K-Domain runtime and defines hardware-gated Q-Domain and Phi-Domain service
-surfaces.
+`xdv-kernel` is the x64 kernel component for XDV OS and aligns to
+XDV-010 (kernel architecture) and XDV-080 (reference implementation) goals.
+
+## Scope
+
+- Keep **core sectors only** inside `xdv-kernel/sector`.
+- Consume split dependencies (`xdv-dal`, `xdv-cds`, `xdv-umf`,
+  `xdv-hypervisor`, `xdv-sdbm`) via stable versioned interfaces.
+- Stabilize kernel boot/runtime entry contracts with explicit assertions.
 
 ## Runtime Paths
 
-The repository currently contains two kernel runtime entry profiles:
+The repository contains two kernel runtime entry profiles:
 
 - `sector/xdv_kernel/src/kernel.ds`  
-  Dust kernel entry (`kernel_start`) and core runtime boot sequence.
+  Dust kernel entry (`kernel_start`) and contract assertions.
 - `sector/xdv_kernel/src/kernel_runtime_shell.asm`  
   bare-metal runtime shell profile (US keyboard layout, command buffer,
   dispatcher, and console command execution path used in VM bring-up flows).
 
-## Domain Model
+## Core Sectors
 
-- `K-Domain`: classical x64 execution path (active on supported hardware).
-- `Q-Domain`: hardware-gated quantum domain interfaces.
-- `Phi-Domain`: hardware-gated phase-native interfaces.
-
-When Q/Phi hardware is not present, domain probes and operations are expected
-to report domain-not-available behavior.
-
-## Sectors
-
-The workspace defines 8 in-repo sectors:
+`xdv-kernel/sector` contains 8 core sectors:
 
 - `xdv_boot`
 - `xdv_memory`
@@ -39,20 +36,30 @@ The workspace defines 8 in-repo sectors:
 - `xdv_phidomain`
 - `xdv_odt`
 
-Each sector contains `src/*.ds` and sector tests (`*_tests.ds`).
+No split dependency implementation sectors are retained in-repo.
 
-The workspace also consumes 5 standalone split projects through
-`[workspace.sectors]` dependencies:
+## Split Dependencies (Versioned Interfaces)
 
-- `../xdv-dal`
-- `../xdv-cds`
-- `../xdv-umf`
-- `../xdv-hypervisor`
-- `../xdv-sdbm`
+Consumed through `State.toml [workspace.sectors]`:
+
+- `../xdv-dal` (`0.1.0`)
+- `../xdv-cds` (`0.1.0`)
+- `../xdv-umf` (`0.1.0`)
+- `../xdv-hypervisor` (`0.1.0`)
+- `../xdv-sdbm` (`0.1.0`)
+
+`kernel.ds` asserts interface triplets for all split dependencies during boot.
+
+## Kernel Entry Contract Assertions
+
+`sector/xdv_kernel/src/kernel.ds` now asserts:
+
+1. `xdv_os_boot_contract()` status and version.
+2. split dependency interface versions (`0.1.0`).
+3. `runtime_bridge_version()` compatibility.
+4. runtime init/start success before main-loop entry.
 
 ## Build and Validation
-
-Validate all sector source directories:
 
 ```bash
 dust check sector/xdv_boot/src
@@ -72,10 +79,9 @@ dust check ../xdv-sdbm/src
 
 ## Integration Notes
 
-- `xdv-boot` is responsible for loading `kernel.bin` and transferring control.
-- `xdv-os` image build composes `boot.bin` + `kernel.bin` into the xdvfs image.
-- kernel runtime output should be validated in VirtualBox against the expected
-  boot contract chain.
+- `xdv-boot` loads `kernel.bin` and transfers control.
+- `xdv-os` composes `boot.bin + kernel.bin + xdvfs` image artifacts.
+- kernel assertions are intended to fail-fast on contract/interface drift.
 
 ## Documentation
 
@@ -85,19 +91,3 @@ dust check ../xdv-sdbm/src
 - `spec/XDV-Kernel-v0.2-Specification.md`
 - `xdv-kernel_white_paper.md`
 - `CHANGELOG.md`
-
-## Related Projects
-
-- [xdv-os](../xdv-os)
-- [xdv-boot](../xdv-boot)
-- [xdv-runtime](../xdv-runtime)
-- [xdv-xdvfs](../xdv-xdvfs)
-- [xdv-dal](../xdv-dal)
-- [xdv-cds](../xdv-cds)
-- [xdv-umf](../xdv-umf)
-- [xdv-hypervisor](../xdv-hypervisor)
-- [xdv-sdbm](../xdv-sdbm)
-
-## License
-
-Copyright (c) 2026 Dust LLC. See `LICENSE`.

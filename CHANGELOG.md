@@ -5,6 +5,37 @@ All notable changes to the XDV Kernel are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-02-28
+
+### Changed
+
+- Enforced **core sectors only** in `xdv-kernel/sector` by removing retired
+  duplicate split-sector directories:
+  - `sector/xdv_dal`
+  - `sector/xdv_cds`
+  - `sector/xdv_umf`
+  - `sector/xdv_hypervisor`
+  - `sector/xdv_sdbm`
+- Updated kernel workspace CI to validate:
+  - 8 core sectors only,
+  - standalone split dependency projects by source path.
+- Stabilized kernel boot/runtime contracts in `sector/xdv_kernel/src/kernel.ds`:
+  - explicit boot contract status/version assertion,
+  - explicit runtime bridge version assertion,
+  - explicit runtime init/start assertions,
+  - fail-fast status codes for assertion failures.
+- Implemented split dependency consumption through versioned interfaces:
+  - kernel asserts `0.1.0` interface triplets for DAL/CDS/UMF/Hypervisor/SDBM.
+- Added stable split-interface version functions in standalone dependency
+  projects:
+  - `xdv-dal/src/dal.ds`
+  - `xdv-cds/src/cds.ds`
+  - `xdv-umf/src/umf.ds`
+  - `xdv-hypervisor/src/hypervisor.ds`
+  - `xdv-sdbm/src/sdbm.ds`
+- Added runtime bridge version accessor in `xdv-runtime/src/runtime_bridge.ds`
+  for kernel runtime contract assertion.
+- Updated README/docs for XDV-010/XDV-080 alignment and assertion order.
 ## [0.2.2] - 2026-02-28
 
 ### Changed

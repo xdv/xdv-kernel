@@ -9,11 +9,21 @@ forge XdvKernel {
     const STATUS_INIT_FAILED: UInt32 = 1;
     const STATUS_RUNTIME_LOAD_FAILED: UInt32 = 2;
     const STATUS_RUNTIME_START_FAILED: UInt32 = 3;
+    const STATUS_BOOT_CONTRACT_ASSERT_FAILED: UInt32 = 4;
+    const STATUS_INTERFACE_ASSERT_FAILED: UInt32 = 5;
+    const STATUS_RUNTIME_CONTRACT_ASSERT_FAILED: UInt32 = 6;
     const STATUS_DOMAIN_NOT_AVAILABLE: UInt32 = 100;
     const STATUS_PANIC: UInt32 = 255;
 
     const KERNEL_VERSION: UInt32 = 2;
-    const KERNEL_BUILD_DATE: UInt32 = 20260212;
+    const KERNEL_BUILD_DATE: UInt32 = 20260228;
+
+    const BOOT_CONTRACT_EXPECTED_VERSION: UInt32 = 3;
+    const RUNTIME_BRIDGE_EXPECTED_VERSION: UInt32 = 5;
+
+    const SPLIT_IFACE_EXPECTED_MAJOR: UInt32 = 0;
+    const SPLIT_IFACE_EXPECTED_MINOR: UInt32 = 1;
+    const SPLIT_IFACE_EXPECTED_PATCH: UInt32 = 0;
 
     const FLAG_FALSE: UInt32 = 0;
     const PROCESS_BASE_COUNT: UInt32 = 2;
@@ -25,18 +35,163 @@ forge XdvKernel {
     // codegen-safe boot path used by xdv-os image build.
     proc K::kernel_start() -> UInt32 {
         emit "XDV Kernel starting...";
-        xdv_os_boot_contract();
-        emit "XDV Kernel: received loader handoff";
-        init_kernel_boot();
-        load_runtime_boot();
-        start_runtime_boot();
-        kernel_main_boot();
-        return STATUS_OK;
+
+        let boot_contract = kernel_assert_boot_contract();
+        if boot_contract == STATUS_OK {
+            let split_interfaces = kernel_assert_split_dependency_interfaces();
+            if split_interfaces == STATUS_OK {
+                let runtime_contract = kernel_assert_runtime_contract();
+                if runtime_contract == STATUS_OK {
+                    let init_status = init_kernel_boot();
+                    if init_status == STATUS_OK {
+                        let load_status = load_runtime_boot();
+                        if load_status == STATUS_OK {
+                            let runtime_status = start_runtime_boot();
+                            if runtime_status == STATUS_OK {
+                                kernel_main_boot();
+                                return STATUS_OK;
+                            } else {
+                                return runtime_status;
+                            }
+                        } else {
+                            return load_status;
+                        }
+                    } else {
+                        return init_status;
+                    }
+                } else {
+                    return runtime_contract;
+                }
+            } else {
+                return split_interfaces;
+            }
+        } else {
+            return boot_contract;
+        }
+    }
+
+    proc K::kernel_assert_boot_contract() -> UInt32 {
+        let status = xdv_os_boot_contract();
+        if status == STATUS_OK {
+            let version = xdv_os_boot_contract_version();
+            if version == BOOT_CONTRACT_EXPECTED_VERSION {
+                emit "XDV Kernel: boot contract assertion passed";
+                return STATUS_OK;
+            } else {
+                emit "XDV Kernel: boot contract version assertion failed";
+                return STATUS_BOOT_CONTRACT_ASSERT_FAILED;
+            }
+        } else {
+            emit "XDV Kernel: boot contract status assertion failed";
+            return STATUS_BOOT_CONTRACT_ASSERT_FAILED;
+        }
+    }
+
+    proc K::kernel_assert_runtime_contract() -> UInt32 {
+        let version = runtime_bridge_version();
+        if version == RUNTIME_BRIDGE_EXPECTED_VERSION {
+            emit "XDV Kernel: runtime contract assertion passed";
+            return STATUS_OK;
+        } else {
+            emit "XDV Kernel: runtime contract version assertion failed";
+            return STATUS_RUNTIME_CONTRACT_ASSERT_FAILED;
+        }
+    }
+
+    proc K::kernel_assert_version_triplet(major: UInt32, minor: UInt32, patch: UInt32) -> UInt32 {
+        if major == SPLIT_IFACE_EXPECTED_MAJOR {
+            if minor == SPLIT_IFACE_EXPECTED_MINOR {
+                if patch == SPLIT_IFACE_EXPECTED_PATCH {
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INTERFACE_ASSERT_FAILED;
+                }
+            } else {
+                return STATUS_INTERFACE_ASSERT_FAILED;
+            }
+        } else {
+            return STATUS_INTERFACE_ASSERT_FAILED;
+        }
+    }
+
+    proc K::kernel_assert_dal_interface() -> UInt32 {
+        return kernel_assert_version_triplet(
+            xdv_dal_interface_version_major(),
+            xdv_dal_interface_version_minor(),
+            xdv_dal_interface_version_patch()
+        );
+    }
+
+    proc K::kernel_assert_cds_interface() -> UInt32 {
+        return kernel_assert_version_triplet(
+            xdv_cds_interface_version_major(),
+            xdv_cds_interface_version_minor(),
+            xdv_cds_interface_version_patch()
+        );
+    }
+
+    proc K::kernel_assert_umf_interface() -> UInt32 {
+        return kernel_assert_version_triplet(
+            xdv_umf_interface_version_major(),
+            xdv_umf_interface_version_minor(),
+            xdv_umf_interface_version_patch()
+        );
+    }
+
+    proc K::kernel_assert_hypervisor_interface() -> UInt32 {
+        return kernel_assert_version_triplet(
+            xdv_hypervisor_interface_version_major(),
+            xdv_hypervisor_interface_version_minor(),
+            xdv_hypervisor_interface_version_patch()
+        );
+    }
+
+    proc K::kernel_assert_sdbm_interface() -> UInt32 {
+        return kernel_assert_version_triplet(
+            xdv_sdbm_interface_version_major(),
+            xdv_sdbm_interface_version_minor(),
+            xdv_sdbm_interface_version_patch()
+        );
+    }
+
+    proc K::kernel_assert_split_dependency_interfaces() -> UInt32 {
+        let dal = kernel_assert_dal_interface();
+        if dal == STATUS_OK {
+            let cds = kernel_assert_cds_interface();
+            if cds == STATUS_OK {
+                let umf = kernel_assert_umf_interface();
+                if umf == STATUS_OK {
+                    let hypervisor = kernel_assert_hypervisor_interface();
+                    if hypervisor == STATUS_OK {
+                        let sdbm = kernel_assert_sdbm_interface();
+                        if sdbm == STATUS_OK {
+                            emit "XDV Kernel: split dependency interfaces stable (0.1.0)";
+                            return STATUS_OK;
+                        } else {
+                            emit "XDV Kernel: sdbm interface assertion failed";
+                            return STATUS_INTERFACE_ASSERT_FAILED;
+                        }
+                    } else {
+                        emit "XDV Kernel: hypervisor interface assertion failed";
+                        return STATUS_INTERFACE_ASSERT_FAILED;
+                    }
+                } else {
+                    emit "XDV Kernel: umf interface assertion failed";
+                    return STATUS_INTERFACE_ASSERT_FAILED;
+                }
+            } else {
+                emit "XDV Kernel: cds interface assertion failed";
+                return STATUS_INTERFACE_ASSERT_FAILED;
+            }
+        } else {
+            emit "XDV Kernel: dal interface assertion failed";
+            return STATUS_INTERFACE_ASSERT_FAILED;
+        }
     }
 
     proc K::init_kernel_boot() -> UInt32 {
         emit "Initializing XDV Kernel v0.2.0";
-        emit "Build date: 2026-02-15";
+        emit "Build date: 2026-02-28";
         emit "Booting on K-Domain (x64/Intel/AMD)";
         emit "K-Domain (x64): ONLINE";
         return STATUS_OK;
@@ -44,15 +199,25 @@ forge XdvKernel {
 
     proc K::load_runtime_boot() -> UInt32 {
         emit "XDV Kernel: loading xdv-runtime";
-        init();
-        return STATUS_OK;
+        let runtime = init();
+        if runtime == STATUS_OK {
+            return STATUS_OK;
+        } else {
+            emit "XDV Kernel: runtime init assertion failed";
+            return STATUS_RUNTIME_LOAD_FAILED;
+        }
     }
 
     proc K::start_runtime_boot() -> UInt32 {
         emit "XDV Kernel: starting xdv-runtime";
-        start_userspace();
-        emit "XDV Kernel: xdv-runtime online";
-        return STATUS_OK;
+        let userspace = start_userspace();
+        if userspace == STATUS_OK {
+            emit "XDV Kernel: xdv-runtime online";
+            return STATUS_OK;
+        } else {
+            emit "XDV Kernel: runtime userspace start assertion failed";
+            return STATUS_RUNTIME_START_FAILED;
+        }
     }
 
     proc K::kernel_main_boot() -> UInt32 {

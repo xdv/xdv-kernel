@@ -13,6 +13,14 @@ xdv_umf = "../xdv-umf"
 xdv_hypervisor = "../xdv-hypervisor"
 xdv_sdbm = "../xdv-sdbm"
 
+# Versioned split-dependency interface expectations consumed by xdv-kernel.
+[workspace.split_interfaces]
+xdv_dal = "0.1.0"
+xdv_cds = "0.1.0"
+xdv_umf = "0.1.0"
+xdv_hypervisor = "0.1.0"
+xdv_sdbm = "0.1.0"
+
 [[sector]]
 name = "xdv_boot"
 path = "sector/xdv_boot"

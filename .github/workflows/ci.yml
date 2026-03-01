@@ -18,11 +18,7 @@ jobs:
 
       - name: Clone dust compiler
         run: |
-          # Clone dust compiler to sibling directory
           git clone --depth 1 https://github.com/dustlang/dust.git ../dust
-
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
@@ -34,11 +30,28 @@ jobs:
           cd ../dust
           cargo build --workspace
 
-      - name: Check all kernel sectors
+      - name: Check xdv-kernel core sectors
         run: |
           export PATH="$PWD/../dust/target/debug:$PATH"
-          for sector in xdv_boot xdv_memory xdv_cpu xdv_kernel xdv_drivers xdv_dal xdv_qdomain xdv_phidomain xdv_cds xdv_umf xdv_hypervisor xdv_sdbm xdv_odt; do
+          for sector in xdv_boot xdv_memory xdv_cpu xdv_kernel xdv_drivers xdv_qdomain xdv_phidomain xdv_odt; do
             echo "Checking sector/$sector/src..."
             dust check "sector/$sector/src" || { echo "FAILED: $sector"; exit 1; }
           done
-          echo "All 13 sectors check OK"
+          echo "All 8 core sectors check OK"
+
+      - name: Check split dependency projects
+        run: |
+          export PATH="$PWD/../dust/target/debug:$PATH"
+          for dep in ../xdv-dal/src ../xdv-cds/src ../xdv-umf/src ../xdv-hypervisor/src ../xdv-sdbm/src; do
+            echo "Checking $dep..."
+            dust check "$dep" || { echo "FAILED: $dep"; exit 1; }
+          done
+          echo "All split dependency projects check OK"
+
+      - name: Verify kernel contract assertions
+        run: |
+          grep -q "kernel_assert_boot_contract" sector/xdv_kernel/src/kernel.ds
+          grep -q "kernel_assert_runtime_contract" sector/xdv_kernel/src/kernel.ds
+          grep -q "kernel_assert_split_dependency_interfaces" sector/xdv_kernel/src/kernel.ds
+          grep -q "split dependency interfaces stable (0.1.0)" sector/xdv_kernel/src/kernel.ds
+          echo "Kernel assertion markers present"
