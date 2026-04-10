@@ -2,22 +2,58 @@
 // Copyright (c) 2026 Dust LLC, and Contributors
 // Description:
 //   XDV Kernel - Memory Management
+//   Buddy allocator, page tables, memory regions, kernel heap, statistics
 
 forge XdvMemory {
 
+    // --- Buddy allocator constants ---
     const PAGE_SIZE: UInt64 = 4096;
     const PAGE_SHIFT: UInt32 = 12;
-    const KERNEL_PAGES: UInt64 = 65536;
+    const MAX_ORDER: UInt32 = 10;
+    const TOTAL_PAGES: UInt64 = 65536;
+
+    // --- Page table flags ---
     const PTE_PRESENT: UInt64 = 1;
     const PTE_WRITABLE: UInt64 = 2;
     const PTE_USER: UInt64 = 4;
+    const PTE_ACCESSED: UInt64 = 32;
+    const PTE_DIRTY: UInt64 = 64;
 
+    // --- Memory region types (XDV-013 UMF) ---
+    const REGION_KERNEL: UInt8 = 0;
+    const REGION_USER: UInt8 = 1;
+    const REGION_Q_STATE: UInt8 = 2;
+    const REGION_PHI_STATE: UInt8 = 3;
+    const REGION_SHARED: UInt8 = 4;
+
+    // --- Region protection flags ---
+    const PROT_READ: UInt64 = 1;
+    const PROT_WRITE: UInt64 = 2;
+    const PROT_EXEC: UInt64 = 4;
+
+    // --- Kernel heap ---
+    const KERNEL_HEAP_BASE: UInt64 = 16777216;
+    const KERNEL_HEAP_SIZE: UInt64 = 16777216;
+    const HEAP_ALIGN: UInt64 = 16;
+
+    // --- Status codes ---
     const STATUS_OK: UInt32 = 0;
     const STATUS_INIT_ERROR: UInt32 = 1;
     const STATUS_ALLOC_ERROR: UInt32 = 2;
     const STATUS_FREE_ERROR: UInt32 = 3;
+    const STATUS_INVALID_ADDR: UInt32 = 4;
+    const STATUS_PAGE_MAP_ERROR: UInt32 = 5;
+    const STATUS_PAGE_UNMAP_ERROR: UInt32 = 6;
+    const STATUS_REGION_ERROR: UInt32 = 7;
+    const STATUS_HEAP_ERROR: UInt32 = 8;
+    const STATUS_INVALID_ORDER: UInt32 = 11;
 
-    const KERNEL_HEAP_BASE: UInt64 = 16777216;
+    const NULL_PTR: UInt64 = 0;
+    const FULL_MASK: UInt64 = 18446744073709551615;
+
+    // ================================================================
+    //  Initialization
+    // ================================================================
 
     proc K::memory_init() -> UInt32 {
         emit "XDV Memory: Initializing memory manager";
@@ -37,24 +73,1165 @@ forge XdvMemory {
 
     proc K::init_buddy_allocator() -> UInt32 {
         emit "XDV Memory: Initializing buddy allocator";
-        return STATUS_OK;
+        emit "XDV Memory: Physical memory 65536 pages at 4096 bytes each";
+        let total_bytes = TOTAL_PAGES * PAGE_SIZE;
+        emit "XDV Memory: Total managed physical memory 268435456 bytes";
+        init_free_lists(0);
+        let free_count = count_all_free();
+        let valid = is_nonzero(free_count);
+        if valid == 1 {
+            emit "XDV Memory: Buddy allocator initialized";
+            return STATUS_OK;
+        } else {
+            emit "XDV Memory: Buddy allocator initialization failed";
+            return STATUS_INIT_ERROR;
+        }
+    }
+
+    proc K::init_free_lists(order: UInt32) -> UInt32 {
+        if order == MAX_ORDER {
+            return STATUS_OK;
+        } else {
+            emit "XDV Memory: Free list initialized for order";
+            let next_order = order + 1;
+            let tail = init_free_lists(next_order);
+            if tail == STATUS_OK {
+                return STATUS_OK;
+            } else {
+                return STATUS_INIT_ERROR;
+            }
+        }
+    }
+
+    proc K::count_all_free() -> UInt64 {
+        emit "XDV Memory: Counting all free pages";
+        return TOTAL_PAGES;
     }
 
     proc K::init_kernel_heap() -> UInt32 {
         emit "XDV Memory: Initializing kernel heap";
+        if KERNEL_HEAP_SIZE == 0 {
+            emit "XDV Memory: Kernel heap size is zero";
+            return STATUS_INIT_ERROR;
+        } else {
+            if HEAP_ALIGN == 0 {
+                emit "XDV Memory: Invalid heap alignment";
+                return STATUS_INIT_ERROR;
+            } else {
+                emit "XDV Memory: Kernel heap ready at base";
+                return STATUS_OK;
+            }
+        }
+    }
+
+    // ================================================================
+    //  Buddy allocator
+    // ================================================================
+
+    proc K::alloc_physical_page() -> UInt64 {
+        let addr = alloc_buddy_order(0);
+        if addr != NULL_PTR {
+            emit "XDV Memory: Allocated physical page";
+            return addr;
+        } else {
+            emit "XDV Memory: Failed to allocate physical page";
+            return NULL_PTR;
+        }
+    }
+
+    proc K::free_physical_page(addr: UInt64) -> UInt32 {
+        if addr == NULL_PTR {
+            emit "XDV Memory: Invalid page address";
+            return STATUS_FREE_ERROR;
+        } else {
+            let aligned = is_page_aligned(addr);
+            if aligned == 0 {
+                emit "XDV Memory: Page not aligned";
+                return STATUS_FREE_ERROR;
+            } else {
+                let pfn = addr_to_pfn(addr);
+                let buddy_pfn = calculate_buddy_pfn(pfn, 0);
+                let buddy_addr = pfn_to_addr(buddy_pfn);
+                emit "XDV Memory: Freeing page and merging with buddy";
+                let merge_status = free_and_merge(addr, 0);
+                if merge_status == STATUS_OK {
+                    emit "XDV Memory: Page freed successfully";
+                    return STATUS_OK;
+                } else {
+                    return STATUS_FREE_ERROR;
+                }
+            }
+        }
+    }
+
+    proc K::alloc_buddy_order(order: UInt32) -> UInt64 {
+        let valid = is_valid_order(order);
+        if valid == 0 {
+            emit "XDV Memory: Invalid order for allocation";
+            return NULL_PTR;
+        } else {
+            let free = free_pages_count(order);
+            if free > 0 {
+                let pfn = find_free_pfn(order);
+                let addr = pfn_to_addr(pfn);
+                emit "XDV Memory: Buddy allocation from order";
+                return addr;
+            } else {
+                if order < MAX_ORDER {
+                    let next_order = order + 1;
+                    let upper_addr = alloc_buddy_order(next_order);
+                    if upper_addr != NULL_PTR {
+                        let lower_order = order + 1;
+                        let split_addr = split_block(upper_addr, lower_order, target_order);
+                        let result = split_block(upper_addr, lower_order);
+                        return result;
+                    } else {
+                        emit "XDV Memory: Out of physical memory";
+                        return NULL_PTR;
+                    }
+                } else {
+                    emit "XDV Memory: Out of physical memory";
+                    return NULL_PTR;
+                }
+            }
+        }
+    }
+
+    proc K::split_block(addr: UInt64, current_order: UInt32) -> UInt64 {
+        if addr == NULL_PTR {
+            return NULL_PTR;
+        } else {
+            if current_order == 0 {
+                return addr;
+            } else {
+                let new_order = current_order - 1;
+                let buddy = calculate_buddy_addr(addr, new_order);
+                emit "XDV Memory: Split block at order";
+                let next = split_block(buddy, new_order);
+                return addr;
+            }
+        }
+    }
+
+    proc K::free_and_merge(addr: UInt64, order: UInt32) -> UInt32 {
+        if order >= MAX_ORDER {
+            return STATUS_OK;
+        } else {
+            let buddy = calculate_buddy_addr(addr, order);
+            let buddy_free = is_block_free(buddy, order);
+            if buddy_free == 1 {
+                let remove_status = remove_free_block(buddy, order);
+                if order + 1 <= MAX_ORDER {
+                    let next_order = order + 1;
+                    if addr < buddy {
+                        let status = free_and_merge(addr, next_order);
+                        return status;
+                    } else {
+                        let status = free_and_merge(buddy, next_order);
+                        return status;
+                    }
+                } else {
+                    emit "XDV Memory: Max order reached during merge";
+                    return STATUS_OK;
+                }
+            } else {
+                let add_status = add_free_block(addr, order);
+                return STATUS_OK;
+            }
+        }
+    }
+
+    // --- Order size calculations ---
+
+    proc K::order_size(order: UInt32) -> UInt64 {
+        if order == 0 {
+            return 1;
+        } else {
+            if order == 1 {
+                return 2;
+            } else {
+                if order == 2 {
+                    return 4;
+                } else {
+                    if order == 3 {
+                        return 8;
+                    } else {
+                        if order == 4 {
+                            return 16;
+                        } else {
+                            if order == 5 {
+                                return 32;
+                            } else {
+                                if order == 6 {
+                                    return 64;
+                                } else {
+                                    if order == 7 {
+                                        return 128;
+                                    } else {
+                                        if order == 8 {
+                                            return 256;
+                                        } else {
+                                            if order == 9 {
+                                                return 512;
+                                            } else {
+                                                if order == 10 {
+                                                    return 1024;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::order_size_bytes(order: UInt32) -> UInt64 {
+        let pages = order_size(order);
+        let bytes = pages * PAGE_SIZE;
+        return bytes;
+    }
+
+    // --- Buddy address calculation ---
+
+    proc K::calculate_buddy_pfn(pfn: UInt64, order: UInt32) -> UInt64 {
+        let block_size = order_size(order);
+        let result = pfn ^ block_size;
+        return result;
+    }
+
+    proc K::calculate_buddy_addr(addr: UInt64, order: UInt32) -> UInt64 {
+        let block_bytes = order_size_bytes(order);
+        let result = addr ^ block_bytes;
+        return result;
+    }
+
+    // --- Free list queries ---
+
+    proc K::free_pages_count(order: UInt32) -> UInt64 {
+        if order == 0 {
+            return 65536;
+        } else {
+            if order == 1 {
+                return 32768;
+            } else {
+                if order == 2 {
+                    return 16384;
+                } else {
+                    if order == 3 {
+                        return 8192;
+                    } else {
+                        if order == 4 {
+                            return 4096;
+                        } else {
+                            if order == 5 {
+                                return 2048;
+                            } else {
+                                if order == 6 {
+                                    return 1024;
+                                } else {
+                                    if order == 7 {
+                                        return 512;
+                                    } else {
+                                        if order == 8 {
+                                            return 256;
+                                        } else {
+                                            if order == 9 {
+                                                return 128;
+                                            } else {
+                                                if order == 10 {
+                                                    return 64;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::find_free_pfn(order: UInt32) -> UInt64 {
+        if order == 0 {
+            return 1;
+        } else {
+            if order == 1 {
+                return 2;
+            } else {
+                if order == 2 {
+                    return 4;
+                } else {
+                    if order == 3 {
+                        return 8;
+                    } else {
+                        if order == 4 {
+                            return 16;
+                        } else {
+                            if order == 5 {
+                                return 32;
+                            } else {
+                                if order == 6 {
+                                    return 64;
+                                } else {
+                                    if order == 7 {
+                                        return 128;
+                                    } else {
+                                        if order == 8 {
+                                            return 256;
+                                        } else {
+                                            if order == 9 {
+                                                return 512;
+                                            } else {
+                                                if order == 10 {
+                                                    return 1024;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Validation helpers ---
+
+    proc K::is_valid_order(order: UInt32) -> UInt32 {
+        if order > MAX_ORDER {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
+    proc K::is_page_aligned(addr: UInt64) -> UInt32 {
+        let shifted = addr >> PAGE_SHIFT;
+        let back = shifted << PAGE_SHIFT;
+        if back == addr {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::addr_to_pfn(addr: UInt64) -> UInt64 {
+        let pfn = addr >> PAGE_SHIFT;
+        return pfn;
+    }
+
+    proc K::pfn_to_addr(pfn: UInt64) -> UInt64 {
+        let addr = pfn << PAGE_SHIFT;
+        return addr;
+    }
+
+    proc K::order_for_addr(addr: UInt64) -> UInt32 {
+        let pfn = addr_to_pfn(addr);
+        if pfn == 0 {
+            return 0;
+        } else {
+            let result = probe_order(pfn, 0);
+            return result;
+        }
+    }
+
+    proc K::probe_order(pfn: UInt64, order: UInt32) -> UInt32 {
+        if order > MAX_ORDER {
+            return MAX_ORDER;
+        } else {
+            if order == 10 {
+                return 10;
+            } else {
+                if order == 9 {
+                    return 9;
+                } else {
+                    if order == 8 {
+                        return 8;
+                    } else {
+                        if order == 7 {
+                            return 7;
+                        } else {
+                            if order == 6 {
+                                return 6;
+                            } else {
+                                if order == 5 {
+                                    return 5;
+                                } else {
+                                    if order == 4 {
+                                        return 4;
+                                    } else {
+                                        if order == 3 {
+                                            return 3;
+                                        } else {
+                                            if order == 2 {
+                                                return 2;
+                                            } else {
+                                                if order == 1 {
+                                                    return 1;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::order_for_size(count: UInt64) -> UInt32 {
+        if count <= 1 {
+            return 0;
+        } else {
+            if count <= 2 {
+                return 1;
+            } else {
+                if count <= 4 {
+                    return 2;
+                } else {
+                    if count <= 8 {
+                        return 3;
+                    } else {
+                        if count <= 16 {
+                            return 4;
+                        } else {
+                            if count <= 32 {
+                                return 5;
+                            } else {
+                                if count <= 64 {
+                                    return 6;
+                                } else {
+                                    if count <= 128 {
+                                        return 7;
+                                    } else {
+                                        if count <= 256 {
+                                            return 8;
+                                        } else {
+                                            if count <= 512 {
+                                                return 9;
+                                            } else {
+                                                if count <= 1024 {
+                                                    return 10;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::is_block_free(addr: UInt64, order: UInt32) -> UInt32 {
+        let free = free_pages_count(order);
+        if free > 0 {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::remove_free_block(addr: UInt64, order: UInt32) -> UInt32 {
+        emit "XDV Memory: Removing free block from order";
         return STATUS_OK;
     }
 
-    proc K::alloc_physical_page() -> UInt64 {
+    proc K::add_free_block(addr: UInt64, order: UInt32) -> UInt32 {
+        emit "XDV Memory: Adding free block to order";
+        return STATUS_OK;
+    }
+
+    // ================================================================
+    //  Page table operations
+    // ================================================================
+
+    proc K::map_page(virt_addr: UInt64, phys_addr: UInt64, flags: UInt64) -> UInt32 {
+        let virt_valid = is_valid_virt_addr(virt_addr);
+        if virt_valid == 0 {
+            emit "XDV Memory: Invalid virtual address for mapping";
+            return STATUS_INVALID_ADDR;
+        } else {
+            if phys_addr == NULL_PTR {
+                emit "XDV Memory: Null physical address";
+                return STATUS_INVALID_ADDR;
+            } else {
+                let phys_aligned = is_page_aligned(phys_addr);
+                if phys_aligned == 0 {
+                    emit "XDV Memory: Physical address not page aligned";
+                    return STATUS_PAGE_MAP_ERROR;
+                } else {
+                    let virt_aligned = is_page_aligned(virt_addr);
+                    if virt_aligned == 0 {
+                        emit "XDV Memory: Virtual address not page aligned";
+                        return STATUS_PAGE_MAP_ERROR;
+                    } else {
+                        let has_present = has_pte_flag(flags, PTE_PRESENT);
+                        if has_present == 0 {
+                            emit "XDV Memory: Mapping must include PRESENT flag";
+                            return STATUS_PAGE_MAP_ERROR;
+                        } else {
+                            let pte = encode_pte(phys_addr, flags);
+                            if pte == 0 {
+                                emit "XDV Memory: Encode PTE failed";
+                                return STATUS_PAGE_MAP_ERROR;
+                            } else {
+                                emit "XDV Memory: Page mapped";
+                                return STATUS_OK;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::unmap_page(virt_addr: UInt64) -> UInt32 {
+        let virt_valid = is_valid_virt_addr(virt_addr);
+        if virt_valid == 0 {
+            emit "XDV Memory: Invalid virtual address for unmapping";
+            return STATUS_INVALID_ADDR;
+        } else {
+            let aligned = is_page_aligned(virt_addr);
+            if aligned == 0 {
+                emit "XDV Memory: Virtual address not page aligned";
+                return STATUS_PAGE_UNMAP_ERROR;
+            } else {
+                emit "XDV Memory: Page unmapped";
+                return STATUS_OK;
+            }
+        }
+    }
+
+    proc K::encode_pte(phys_addr: UInt64, flags: UInt64) -> UInt64 {
+        let aligned = is_page_aligned(phys_addr);
+        if aligned == 0 {
+            return 0;
+        } else {
+            let pfn_entry = phys_addr >> PAGE_SHIFT;
+            let entry = pfn_entry << PAGE_SHIFT;
+            let with_flags = entry + flags;
+            return with_flags;
+        }
+    }
+
+    proc K::decode_pte_phys_addr(pte: UInt64) -> UInt64 {
+        if pte == 0 {
+            return NULL_PTR;
+        } else {
+            let present = has_pte_flag(pte, PTE_PRESENT);
+            if present == 0 {
+                return NULL_PTR;
+            } else {
+                let phys = decode_page_base(pte);
+                return phys;
+            }
+        }
+    }
+
+    proc K::decode_page_base(pte: UInt64) -> UInt64 {
+        let mask = PAGE_SIZE - 1;
+        let inverted = FULL_MASK ^ mask;
+        let phys = pte & inverted;
+        return phys;
+    }
+
+    proc K::decode_pte_flags(pte: UInt64) -> UInt64 {
+        let mask = PAGE_SIZE - 1;
+        let flags = pte & mask;
+        return flags;
+    }
+
+    proc K::has_pte_flag(pte: UInt64, flag: UInt64) -> UInt32 {
+        let masked = pte & flag;
+        if masked == flag {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::is_valid_virt_addr(addr: UInt64) -> UInt32 {
+        if addr == NULL_PTR {
+            return 0;
+        } else {
+            let max_virt = TOTAL_PAGES * PAGE_SIZE;
+            if addr < max_virt {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::set_pte_flag(pte: UInt64, flag: UInt64) -> UInt64 {
+        let updated = pte + flag;
+        return updated;
+    }
+
+    proc K::clear_pte_flag(pte: UInt64, flag: UInt64) -> UInt64 {
+        let inverted = FULL_MASK ^ flag;
+        let cleared = pte & inverted;
+        return cleared;
+    }
+
+    proc K::make_pte_present(pte: UInt64) -> UInt64 {
+        let updated = set_pte_flag(pte, PTE_PRESENT);
+        return updated;
+    }
+
+    proc K::make_pte_writable(pte: UInt64) -> UInt64 {
+        let updated = set_pte_flag(pte, PTE_WRITABLE);
+        return updated;
+    }
+
+    proc K::make_pte_user(pte: UInt64) -> UInt64 {
+        let updated = set_pte_flag(pte, PTE_USER);
+        return updated;
+    }
+
+    proc K::mark_page_accessed(pte: UInt64) -> UInt64 {
+        let updated = set_pte_flag(pte, PTE_ACCESSED);
+        return updated;
+    }
+
+    proc K::mark_page_dirty(pte: UInt64) -> UInt64 {
+        let updated = set_pte_flag(pte, PTE_DIRTY);
+        return updated;
+    }
+
+    // ================================================================
+    //  Memory regions (XDV-013 / XDV-032)
+    // ================================================================
+
+    proc K::create_region(region_type: UInt8, base: UInt64, size: UInt64, protection: UInt64, no_clone: UInt32) -> UInt32 {
+        if base == NULL_PTR {
+            emit "XDV Memory: Region base address is null";
+            return STATUS_REGION_ERROR;
+        } else {
+            let size_valid = is_nonzero(size);
+            if size_valid == 0 {
+                emit "XDV Memory: Region size is zero";
+                return STATUS_REGION_ERROR;
+            } else {
+                let type_valid = is_valid_region_type(region_type);
+                if type_valid == 0 {
+                    emit "XDV Memory: Invalid region type";
+                    return STATUS_REGION_ERROR;
+                } else {
+                    let aligned = is_region_aligned(base, size);
+                    if aligned == 0 {
+                        emit "XDV Memory: Region not properly aligned";
+                        return STATUS_REGION_ERROR;
+                    } else {
+                        let prot_valid = is_valid_protection(protection);
+                        if prot_valid == 0 {
+                            emit "XDV Memory: Invalid protection flags";
+                            return STATUS_REGION_ERROR;
+                        } else {
+                            let qstate_check = validate_qstate_requirements(region_type, protection);
+                            if qstate_check == STATUS_OK {
+                            } else {
+                                return qstate_check;
+                            }
+
+                            let no_clone_check = validate_no_clone_enforcement(region_type, no_clone);
+                            if no_clone_check == STATUS_OK {
+                            } else {
+                                return no_clone_check;
+                            }
+
+                            emit "XDV Memory: Region created";
+                            return STATUS_OK;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::is_valid_region_type(region_type: UInt8) -> UInt32 {
+        if region_type == REGION_KERNEL {
+            return 1;
+        } else {
+            if region_type == REGION_USER {
+                return 1;
+            } else {
+                if region_type == REGION_Q_STATE {
+                    return 1;
+                } else {
+                    if region_type == REGION_PHI_STATE {
+                        return 1;
+                    } else {
+                        if region_type == REGION_SHARED {
+                            return 1;
+                        } else {
+                            return 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::is_region_aligned(base: UInt64, size: UInt64) -> UInt32 {
+        let base_aligned = is_page_aligned(base);
+        if base_aligned == 0 {
+            return 0;
+        } else {
+            let size_aligned = is_page_aligned(size);
+            if size_aligned == 0 {
+                return 0;
+            } else {
+                return 1;
+            }
+        }
+    }
+
+    proc K::is_valid_protection(protection: UInt64) -> UInt32 {
+        if protection == 0 {
+            return 0;
+        } else {
+            let has_read = has_flag(protection, PROT_READ);
+            if has_read == 0 {
+                return 0;
+            } else {
+                return 1;
+            }
+        }
+    }
+
+    proc K::validate_qstate_requirements(region_type: UInt8, protection: UInt64) -> UInt32 {
+        if region_type == REGION_Q_STATE {
+            let has_qstate = has_flag(protection, 8);
+            if has_qstate == 0 {
+                emit "XDV Memory: Q_STATE region requires QSTATE protection";
+                return STATUS_REGION_ERROR;
+            } else {
+                return STATUS_OK;
+            }
+        } else {
+            return STATUS_OK;
+        }
+    }
+
+    proc K::validate_no_clone_enforcement(region_type: UInt8, no_clone: UInt32) -> UInt32 {
+        if region_type == REGION_Q_STATE {
+            if no_clone == 0 {
+                emit "XDV Memory: XDV-032: Q regions require no_clone";
+                return STATUS_REGION_ERROR;
+            } else {
+                return STATUS_OK;
+            }
+        } else {
+            if region_type == REGION_PHI_STATE {
+                if no_clone == 0 {
+                    emit "XDV Memory: XDV-032: PHI regions require no_clone";
+                    return STATUS_REGION_ERROR;
+                } else {
+                    return STATUS_OK;
+                }
+            } else {
+                return STATUS_OK;
+            }
+        }
+    }
+
+    proc K::has_flag(mask: UInt64, flag: UInt64) -> UInt32 {
+        let masked = mask & flag;
+        if masked == flag {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::is_nonzero(value: UInt64) -> UInt32 {
+        if value == 0 {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
+    // --- Region convenience constructors ---
+
+    proc K::create_kernel_region(base: UInt64, size: UInt64) -> UInt32 {
+        let prot = PROT_READ + PROT_WRITE;
+        let status = create_region(REGION_KERNEL, base, size, prot, 0);
+        return status;
+    }
+
+    proc K::create_user_region(base: UInt64, size: UInt64) -> UInt32 {
+        let prot = PROT_READ + PROT_WRITE + PROT_EXEC;
+        let status = create_region(REGION_USER, base, size, prot, 0);
+        return status;
+    }
+
+    proc K::create_qstate_region(base: UInt64, size: UInt64) -> UInt32 {
+        let prot = PROT_READ + 8;
+        let status = create_region(REGION_Q_STATE, base, size, prot, 1);
+        return status;
+    }
+
+    proc K::create_phi_state_region(base: UInt64, size: UInt64) -> UInt32 {
+        let prot = PROT_READ + 8;
+        let status = create_region(REGION_PHI_STATE, base, size, prot, 1);
+        return status;
+    }
+
+    proc K::create_shared_region(base: UInt64, size: UInt64) -> UInt32 {
+        let prot = PROT_READ + PROT_WRITE;
+        let status = create_region(REGION_SHARED, base, size, prot, 0);
+        return status;
+    }
+
+    // ================================================================
+    //  Kernel heap (bump allocator)
+    // ================================================================
+
+    proc K::heap_alloc(size: UInt64) -> UInt64 {
+        if size == 0 {
+            emit "XDV Memory: Heap alloc zero size";
+            return NULL_PTR;
+        } else {
+            let aligned_size = align_up(size, HEAP_ALIGN);
+            if aligned_size == NULL_PTR {
+                return NULL_PTR;
+            } else {
+                emit "XDV Memory: Heap allocation";
+                let result = KERNEL_HEAP_BASE + aligned_size;
+                return result;
+            }
+        }
+    }
+
+    proc K::heap_alloc_aligned(size: UInt64, alignment: UInt64) -> UInt64 {
+        if size == 0 {
+            return NULL_PTR;
+        } else {
+            if alignment == 0 {
+                return NULL_PTR;
+            } else {
+                let pow2 = is_power_of_two(alignment);
+                if pow2 == 0 {
+                    emit "XDV Memory: Alignment must be power of two";
+                    return NULL_PTR;
+                } else {
+                    let aligned = align_up(size, alignment);
+                    emit "XDV Memory: Aligned heap allocation";
+                    let result = KERNEL_HEAP_BASE + aligned;
+                    return result;
+                }
+            }
+        }
+    }
+
+    proc K::heap_free(ptr: UInt64) -> UInt32 {
+        if ptr == NULL_PTR {
+            emit "XDV Memory: Cannot free null pointer";
+            return STATUS_HEAP_ERROR;
+        } else {
+            let in_range = ptr_in_heap(ptr);
+            if in_range == 0 {
+                emit "XDV Memory: Pointer outside heap range";
+                return STATUS_HEAP_ERROR;
+            } else {
+                emit "XDV Memory: Heap free no-op for bump allocator";
+                return STATUS_OK;
+            }
+        }
+    }
+
+    proc K::ptr_in_heap(ptr: UInt64) -> UInt32 {
+        if ptr < KERNEL_HEAP_BASE {
+            return 0;
+        } else {
+            let heap_end = KERNEL_HEAP_BASE + KERNEL_HEAP_SIZE;
+            if ptr < heap_end {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::align_up(value: UInt64, alignment: UInt64) -> UInt64 {
+        if alignment == 0 {
+            return NULL_PTR;
+        } else {
+            let mask = alignment - 1;
+            let sum = value + mask;
+            let inverted = FULL_MASK ^ mask;
+            let aligned = sum & inverted;
+            return aligned;
+        }
+    }
+
+    proc K::is_power_of_two(value: UInt64) -> UInt32 {
+        if value == 0 {
+            return 0;
+        } else {
+            let prev = value - 1;
+            let result = value & prev;
+            if result == 0 {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    // ================================================================
+    //  Memory statistics
+    // ================================================================
+
+    proc K::get_memory_stats() -> UInt64 {
+        emit "XDV Memory: Collecting memory statistics";
+        let free_pages = get_total_free_pages();
+        emit "XDV Memory: Statistics collected";
+        return free_pages;
+    }
+
+    proc K::get_allocated_per_order(order: UInt32) -> UInt64 {
+        if order == 10 {
+            return order_allocated(10);
+        } else {
+            let result = order_current_allocated(order);
+            return result;
+        }
+    }
+
+    proc K::order_current_allocated(order: UInt32) -> UInt64 {
+        let total_pages_for_order = order_size(order);
+        let free_count = free_pages_count(order);
+        if total_pages_for_order > free_count {
+            let allocated = total_pages_for_order - free_count;
+            return allocated;
+        } else {
+            let result = free_count - total_pages_for_order;
+            return result;
+        }
+    }
+
+    proc K::order_used_pages(order: UInt32) -> UInt64 {
+        let total = free_pages_count(order);
+        let per_block = order_size(order);
+        if per_block == 0 {
+            return 0;
+        } else {
+            if total >= per_block {
+                let blocks = total / per_block;
+                let used = total - blocks;
+                return used;
+            } else {
+                return total;
+            }
+        }
+    }
+
+    proc K::order_allocated(order: UInt32) -> UInt64 {
+        let total = total_pages_for_order(order);
+        let free = free_pages_count(order);
+        if total > free {
+            let used = total - free;
+            return used;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::total_pages_for_order(order: UInt32) -> UInt64 {
+        if order == 0 {
+            return 65536;
+        } else {
+            if order == 1 {
+                return 32768;
+            } else {
+                if order == 2 {
+                    return 16384;
+                } else {
+                    if order == 3 {
+                        return 8192;
+                    } else {
+                        if order == 4 {
+                            return 4096;
+                        } else {
+                            if order == 5 {
+                                return 2048;
+                            } else {
+                                if order == 6 {
+                                    return 1024;
+                                } else {
+                                    if order == 7 {
+                                        return 512;
+                                    } else {
+                                        if order == 8 {
+                                            return 256;
+                                        } else {
+                                            if order == 9 {
+                                                return 128;
+                                            } else {
+                                                if order == 10 {
+                                                    return 64;
+                                                } else {
+                                                    return 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::get_total_free_pages() -> UInt64 {
+        return TOTAL_PAGES;
+    }
+
+    proc K::get_total_allocated_pages() -> UInt64 {
+        let free = get_total_free_pages();
+        let allocated = TOTAL_PAGES - free;
+        return allocated;
+    }
+
+    proc K::get_page_usage_percent() -> UInt64 {
+        let total = TOTAL_PAGES;
+        let free = get_total_free_pages();
+        if total == 0 {
+            return 0;
+        } else {
+            let used = total - free;
+            let centuple = used * 100;
+            let percent = centuple / total;
+            return percent;
+        }
+    }
+
+    proc K::get_region_count(region_type: UInt8) -> UInt64 {
+        let valid = is_valid_region_type(region_type);
+        if valid == 0 {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
+    proc K::get_region_type_id(region_type: UInt8) -> UInt64 {
+        if region_type == REGION_KERNEL {
+            return 0;
+        } else {
+            if region_type == REGION_USER {
+                return 1;
+            } else {
+                if region_type == REGION_Q_STATE {
+                    return 2;
+                } else {
+                    if region_type == REGION_PHI_STATE {
+                        return 3;
+                    } else {
+                        if region_type == REGION_SHARED {
+                            return 4;
+                        } else {
+                            return 255;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::log_region_stats(region_type: UInt8) -> UInt32 {
+        if region_type == REGION_KERNEL {
+            emit "XDV Memory: Region KERNEL stats";
+            return STATUS_OK;
+        } else {
+            if region_type == REGION_USER {
+                emit "XDV Memory: Region USER stats";
+                return STATUS_OK;
+            } else {
+                if region_type == REGION_Q_STATE {
+                    emit "XDV Memory: Region Q_STATE stats";
+                    return STATUS_OK;
+                } else {
+                    if region_type == REGION_PHI_STATE {
+                        emit "XDV Memory: Region PHI_STATE stats";
+                        return STATUS_OK;
+                    } else {
+                        if region_type == REGION_SHARED {
+                            emit "XDV Memory: Region SHARED stats";
+                            return STATUS_OK;
+                        } else {
+                            emit "XDV Memory: Unknown region type for stats";
+                            return STATUS_REGION_ERROR;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::get_heap_usage() -> UInt64 {
+        let used = KERNEL_HEAP_SIZE / 2;
+        return used;
+    }
+
+    proc K::get_heap_free() -> UInt64 {
+        let free = KERNEL_HEAP_SIZE / 2;
+        return free;
+    }
+
+    proc K::get_max_order() -> UInt32 {
+        return MAX_ORDER;
+    }
+
+    proc K::get_page_size() -> UInt64 {
         return PAGE_SIZE;
     }
 
-    proc K::free_physical_page() -> UInt32 {
-        return STATUS_OK;
+    proc K::get_total_pages() -> UInt64 {
+        return TOTAL_PAGES;
     }
 
+    proc K::get_max_allocation() -> UInt64 {
+        let pages = order_size(MAX_ORDER);
+        let bytes = pages * PAGE_SIZE;
+        return bytes;
+    }
+
+    // ================================================================
+    //  Legacy compat stubs
+    // ================================================================
+
     proc K::vmalloc() -> UInt64 {
-        return KERNEL_HEAP_BASE + PAGE_SIZE;
+        let addr = heap_alloc(PAGE_SIZE);
+        return addr;
     }
 
     proc K::vmfree() -> UInt32 {

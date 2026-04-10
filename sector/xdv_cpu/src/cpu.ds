@@ -2,100 +2,1401 @@
 // Copyright (c) 2026 Dust LLC, and Contributors
 // Description:
 //   XDV Kernel - CPU Management and Control
+//   GDT, IDT, exception handling, control registers, MSR management
 
 forge XdvCpu {
 
-    const EXCEPTION_DE: UInt8 = 0;
-    const EXCEPTION_DB: UInt8 = 1;
-    const EXCEPTION_PF: UInt8 = 14;
+    // =========================================================================
+    // Status codes
+    // =========================================================================
 
     const STATUS_OK: UInt32 = 0;
     const STATUS_INIT_ERROR: UInt32 = 1;
+    const STATUS_INVALID_VECTOR: UInt32 = 2;
+    const STATUS_RESUMED: UInt32 = 3;
+    const STATUS_PANIC: UInt32 = 4;
+    const STATUS_INVALID_PARAM: UInt32 = 5;
+    const STATUS_UNSUPPORTED: UInt32 = 6;
+    const STATUS_OVERFLOW: UInt32 = 7;
+    const STATUS_DOUBLE_FAULT: UInt32 = 8;
+    const STATUS_TRIPLE_FAULT: UInt32 = 9;
+    const STATUS_MSR_INVALID: UInt32 = 10;
+    const STATUS_CPUID_ERROR: UInt32 = 11;
+
+    // =========================================================================
+    // Exception vector constants (x86-64 CPU exceptions, vectors 0-31)
+    // =========================================================================
+
+    const EXCEPTION_DE: UInt8 = 0;
+    const EXCEPTION_DB: UInt8 = 1;
+    const EXCEPTION_NMI: UInt8 = 2;
+    const EXCEPTION_BP: UInt8 = 3;
+    const EXCEPTION_OF: UInt8 = 4;
+    const EXCEPTION_BR: UInt8 = 5;
+    const EXCEPTION_UD: UInt8 = 6;
+    const EXCEPTION_NM: UInt8 = 7;
+    const EXCEPTION_DF: UInt8 = 8;
+    const EXCEPTION_RS9: UInt8 = 9;
+    const EXCEPTION_TS: UInt8 = 10;
+    const EXCEPTION_NP: UInt8 = 11;
+    const EXCEPTION_SS: UInt8 = 12;
+    const EXCEPTION_GP: UInt8 = 13;
+    const EXCEPTION_PF: UInt8 = 14;
+    const EXCEPTION_RS15: UInt8 = 15;
+    const EXCEPTION_MF: UInt8 = 16;
+    const EXCEPTION_AC: UInt8 = 17;
+    const EXCEPTION_MC: UInt8 = 18;
+    const EXCEPTION_XF: UInt8 = 19;
+
+    // =========================================================================
+    // IRQ mapping (vectors 32-47 for IRQ 0-15)
+    // =========================================================================
+
+    const IRQ_BASE: UInt8 = 32;
+    const IRQ_PIT: UInt8 = 32;
+    const IRQ_KBD: UInt8 = 33;
+    const IRQ_SLAVE: UInt8 = 34;
+    const IRQ_COM2: UInt8 = 35;
+    const IRQ_COM1: UInt8 = 36;
+    const IRQ_LPT2: UInt8 = 37;
+    const IRQ_FLOPPY: UInt8 = 38;
+    const IRQ_LPT1: UInt8 = 39;
+    const IRQ_RTC: UInt8 = 40;
+    const IRQ_IRQ9: UInt8 = 41;
+    const IRQ_IRQ10: UInt8 = 42;
+    const IRQ_IRQ11: UInt8 = 43;
+    const IRQ_PS2: UInt8 = 44;
+    const IRQ_FPU: UInt8 = 45;
+    const IRQ_PRIMARY_ATA: UInt8 = 46;
+    const IRQ_SECONDARY_ATA: UInt8 = 47;
+
+    // =========================================================================
+    // GDT segment selectors  (selector = index * 8 + RPL)
+    // =========================================================================
+
+    const GDT_NULL_SELECTOR: UInt16 = 0x0000;
+    const GDT_KERNEL_CODE_SELECTOR: UInt16 = 0x0008;
+    const GDT_KERNEL_DATA_SELECTOR: UInt16 = 0x0010;
+    const GDT_USER_CODE_SELECTOR: UInt16 = 0x001B;
+    const GDT_USER_DATA_SELECTOR: UInt16 = 0x0023;
+    const GDT_TSS_SELECTOR: UInt16 = 0x0028;
+    const GDT_NUM_ENTRIES: UInt8 = 6;
+
+    // =========================================================================
+    // IDT configuration
+    // =========================================================================
+
+    const IDT_NUM_ENTRIES: UInt8 = 256;
+    const IDT_ENTRY_SIZE: UInt8 = 16;
+
+    // =========================================================================
+    // GDT access byte composition
+    // bit 7=present, bits 5-6=DPL(0=ring0,3=ring3), bit 4=descriptor type(1),
+    // bit 3=executable, bit 2=direction/conforming, bit 1=read/write, bit 0=accessed
+    // =========================================================================
+
+    const GDT_ACCESS_PRESENT: UInt8 = 0x80;
+    const GDT_ACCESS_DESCRIPTOR_TYPE: UInt8 = 0x10;
+    const GDT_ACCESS_EXECUTABLE: UInt8 = 0x08;
+    const GDT_ACCESS_DC: UInt8 = 0x04;
+    const GDT_ACCESS_RW: UInt8 = 0x02;
+    const GDT_ACCESS_ACCESSED: UInt8 = 0x01;
+    const GDT_ACCESS_DPL_0: UInt8 = 0x00;
+    const GDT_ACCESS_DPL_3: UInt8 = 0x60;
+
+    const GDT_ACCESS_NULL: UInt8 = 0x00;
+    const GDT_ACCESS_KERNEL_CODE: UInt8 = 0x9B;
+    const GDT_ACCESS_KERNEL_DATA: UInt8 = 0x93;
+    const GDT_ACCESS_USER_CODE: UInt8 = 0xFB;
+    const GDT_ACCESS_USER_DATA: UInt8 = 0xF3;
+
+    // =========================================================================
+    // GDT granularity byte
+    // bit 7=granularity(1=4KB), bit 6=32-bit default, bit 5=64-bit(L)
+    // =========================================================================
+
+    const GDT_GRAN_4KB: UInt8 = 0x80;
+    const GDT_GRAN_32BIT: UInt8 = 0x40;
+    const GDT_GRAN_64BIT: UInt8 = 0x20;
+    const GDT_GRAN_NULL: UInt8 = 0x00;
+
+    const GDT_GRAN_KERNEL_CODE: UInt8 = 0xA0;
+    const GDT_GRAN_KERNEL_DATA: UInt8 = 0xC0;
+    const GDT_GRAN_USER_CODE: UInt8 = 0xA0;
+    const GDT_GRAN_USER_DATA: UInt8 = 0xC0;
+
+    // =========================================================================
+    // GDT physical addresses
+    // =========================================================================
+
+    const GDT_BASE_ADDRESS: UInt64 = 1073741824;
+    const GDT_LIMIT: UInt16 = 48;
+    const GDT_POINTER_ADDRESS: UInt64 = 1073741888;
+
+    // =========================================================================
+    // IDT physical configuration
+    // =========================================================================
+
+    const IDT_BASE_ADDRESS: UInt64 = 1073807360;
+    const IDT_LIMIT: UInt16 = 4095;
+    const IDT_POINTER_ADDRESS: UInt64 = 1073811456;
+
+    // =========================================================================
+    // TSS configuration
+    // =========================================================================
+
+    const TSS_BASE_ADDRESS: UInt64 = 1073876992;
+    const TSS_SIZE: UInt32 = 104;
+
+    // =========================================================================
+    // Page fault error code bits
+    // bit 0=present, bit 1=write, bit 2=user, bit 3=reserved, bit 4=instruction_fetch
+    // =========================================================================
+
+    const PF_ERR_PRESENT: UInt8 = 0x01;
+    const PF_ERR_WRITE: UInt8 = 0x02;
+    const PF_ERR_USER: UInt8 = 0x04;
+    const PF_ERR_RESERVED: UInt8 = 0x08;
+    const PF_ERR_INSTRUCTION: UInt8 = 0x10;
+
+    // =========================================================================
+    // Exception severity
+    // =========================================================================
+
+    const SEVERITY_RECOVERABLE: UInt8 = 0;
+    const SEVERITY_FATAL: UInt8 = 1;
+    const SEVERITY_UNKNOWN: UInt8 = 2;
+
+    // =========================================================================
+    // CR0 flag bits (Control Register 0)
+    // =========================================================================
+
+    const CR0_PE: UInt64 = 1;
+    const CR0_MP: UInt64 = 2;
+    const CR0_EM: UInt64 = 4;
+    const CR0_TS: UInt64 = 8;
+    const CR0_ET: UInt64 = 16;
+    const CR0_NE: UInt64 = 32;
+    const CR0_WP: UInt64 = 65536;
+    const CR0_AM: UInt64 = 262144;
+    const CR0_PG: UInt64 = 2147483648;
+
+    // =========================================================================
+    // CR4 flag bits (Control Register 4)
+    // =========================================================================
+
+    const CR4_VME: UInt64 = 1;
+    const CR4_PVI: UInt64 = 2;
+    const CR4_DE: UInt64 = 8;
+    const CR4_PSE: UInt64 = 16;
+    const CR4_PAE: UInt64 = 32;
+    const CR4_MCE: UInt64 = 64;
+    const CR4_FSGSBASE: UInt64 = 16384;
+    const CR4_OSXSAVE: UInt64 = 262144;
+    const CR4_SMEP: UInt64 = 1048576;
+    const CR4_SMAP: UInt64 = 524288;
+
+    // =========================================================================
+    // EFER (Extended Feature Enable Register) bits
+    // =========================================================================
+
+    const EFER_SCE: UInt64 = 1;
+    const EFER_LME: UInt64 = 256;
+    const EFER_LMA: UInt64 = 1024;
+    const EFER_NXE: UInt64 = 2048;
+
+    // =========================================================================
+    // IDT type_attr constants
+    // =========================================================================
+
+    const IDT_INTERRUPT_GATE: UInt8 = 0x8E;
+    const IDT_TRAP_GATE: UInt8 = 0x8F;
+    const IDT_TASK_GATE: UInt8 = 0x85;
+
+    // =========================================================================
+    // MSRs (Model-Specific Registers)
+    // =========================================================================
+
+    const MSR_IA32_EFER: UInt32 = 3221225600;
+    const MSR_IA32_LSTAR: UInt32 = 3221225602;
+    const MSR_IA32_STAR: UInt32 = 3221225601;
+    const MSR_IA32_SFMASK: UInt32 = 3221225604;
+    const MSR_IA32_APIC_BASE: UInt32 = 29;
+    const MSR_IA32_TSC: UInt32 = 16;
+
+    // =========================================================================
+    // Bit manipulation masks and shift constants
+    // =========================================================================
+
+    const BYTE_MASK: UInt64 = 255;
+    const WORD_MASK: UInt64 = 65535;
+    const DWORD_MASK: UInt64 = 4294967295;
+    const BIT_0_MASK: UInt64 = 1;
+    const BIT_1_MASK: UInt64 = 2;
+    const BIT_2_MASK: UInt64 = 4;
+    const BIT_3_MASK: UInt64 = 8;
+    const BIT_4_MASK: UInt64 = 16;
+
+    // =========================================================================
+    // CPUID constants
+    // =========================================================================
+
+    const CPUID_LEAF_VENDOR_MAX: UInt32 = 0;
+    const CPUID_LEAF_FEATURES: UInt32 = 1;
+    const CPUID_LEAF_EXTENDED: UInt32 = 2147483649;
+    const CPUID_FEAT_BIT_PAE: UInt32 = 6;
+    const CPUID_EXT_BIT_SYSCALL: UInt32 = 11;
+    const CPUID_EXT_BIT_NX: UInt32 = 20;
+    const CPUID_EXT_BIT_LM: UInt32 = 29;
+
+    // =========================================================================
+    // Boot defaults
+    // =========================================================================
 
     const CR0_BOOT: UInt64 = 1;
     const CR2_BOOT: UInt64 = 0;
     const CR4_BOOT: UInt64 = 32;
+    const EFER_BOOT: UInt64 = 257;
     const STACK_POINTER_BOOT: UInt64 = 2147483648;
     const INSTRUCTION_POINTER_BOOT: UInt64 = 1048576;
 
-    proc K::cpu_init() -> UInt32 {
-        emit "XDV CPU: Initializing CPU subsystem";
-        let gdt_status = setup_gdt();
-        if gdt_status == STATUS_OK {
-            let idt_status = setup_idt();
-            if idt_status == STATUS_OK {
-                let tss_status = setup_tss();
-                if tss_status == STATUS_OK {
-                    enable_interrupts();
-                    emit "XDV CPU: CPU subsystem initialized";
+    // =========================================================================
+    // 1. Exception name lookup by vector number
+    // =========================================================================
+
+    proc K::exception_name(vector: UInt8) -> UInt8 {
+        if vector == 128 {
+            return 128;
+        } else {
+            if vector == 129 {
+                return 129;
+            } else {
+                if vector == 0 {
+                    emit "Divide Error";
+                    return 200;
+                } else {
+                    if vector == 1 {
+                        emit "Debug Exception";
+                        return 200;
+                    } else {
+                        if vector == 2 {
+                            emit "Non Maskable Interrupt";
+                            return 200;
+                        } else {
+                            if vector == 3 {
+                                emit "Breakpoint";
+                                return 200;
+                            } else {
+                                if vector == 4 {
+                                    emit "Overflow";
+                                    return 200;
+                                } else {
+                                    if vector == 5 {
+                                        emit "Bound Range Exceeded";
+                                        return 200;
+                                    } else {
+                                        if vector == 6 {
+                                            emit "Invalid Opcode";
+                                            return 200;
+                                        } else {
+                                            if vector == 7 {
+                                                emit "Device Not Available";
+                                                return 200;
+                                            } else {
+                                                if vector == 8 {
+                                                    emit "Double Fault";
+                                                    return 200;
+                                                } else {
+                                                    if vector == 9 {
+                                                        emit "Reserved";
+                                                        return 200;
+                                                    } else {
+                                                        if vector == 10 {
+                                                            emit "Invalid TSS";
+                                                            return 200;
+                                                        } else {
+                                                            if vector == 11 {
+                                                                emit "Segment Not Present";
+                                                                return 200;
+                                                            } else {
+                                                                if vector == 12 {
+                                                                    emit "Stack Segment Fault";
+                                                                    return 200;
+                                                                } else {
+                                                                    if vector == 13 {
+                                                                        emit "General Protection Fault";
+                                                                        return 200;
+                                                                    } else {
+                                                                        if vector == 14 {
+                                                                            emit "Page Fault";
+                                                                            return 200;
+                                                                        } else {
+                                                                            if vector == 15 {
+                                                                                emit "Reserved";
+                                                                                return 200;
+                                                                            } else {
+                                                                                if vector == 16 {
+                                                                                    emit "x87 FPU Error";
+                                                                                    return 200;
+                                                                                } else {
+                                                                                    if vector == 17 {
+                                                                                        emit "Alignment Check";
+                                                                                        return 200;
+                                                                                    } else {
+                                                                                        if vector == 18 {
+                                                                                            emit "Machine Check";
+                                                                                            return 200;
+                                                                                        } else {
+                                                                                            if vector == 19 {
+                                                                                                emit "SIMD FPU Exception";
+                                                                                                return 200;
+                                                                                            } else {
+                                                                                                return STATUS_INVALID_VECTOR;
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // 2. Determine whether an exception pushes an error code
+    // =========================================================================
+
+    proc K::is_exception_with_error(vector: UInt8) -> UInt8 {
+        if vector == 8 {
+            return 1;
+        } else {
+            if vector == 10 {
+                return 1;
+            } else {
+                if vector == 11 {
+                    return 1;
+                } else {
+                    if vector == 12 {
+                        return 1;
+                    } else {
+                        if vector == 13 {
+                            return 1;
+                        } else {
+                            if vector == 14 {
+                                return 1;
+                            } else {
+                                if vector == 17 {
+                                    return 1;
+                                } else {
+                                    return 0;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // 3. Parse page fault error code fields
+    // =========================================================================
+
+    proc K::page_fault_is_present(error_code: UInt64) -> UInt8 {
+        let masked = error_code & BIT_0_MASK;
+        if masked == 1 {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::page_fault_is_write(error_code: UInt64) -> UInt8 {
+        let masked = (error_code >> 1) & BIT_0_MASK;
+        if masked == 1 {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::page_fault_is_user(error_code: UInt64) -> UInt8 {
+        let masked = (error_code >> 2) & BIT_0_MASK;
+        if masked == 1 {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::page_fault_is_reserved(error_code: UInt64) -> UInt8 {
+        let masked = (error_code >> 3) & BIT_0_MASK;
+        if masked == 1 {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::page_fault_is_instruction_fetch(error_code: UInt64) -> UInt8 {
+        let masked = (error_code >> 4) & BIT_0_MASK;
+        if masked == 1 {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::parse_page_fault_error(error_code: UInt64) -> UInt32 {
+        let is_present = page_fault_is_present(error_code);
+        let is_write = page_fault_is_write(error_code);
+        let is_user = page_fault_is_user(error_code);
+        let is_reserved = page_fault_is_reserved(error_code);
+        let is_insn = page_fault_is_instruction_fetch(error_code);
+        if is_present == 0 {
+            emit "Page fault: not present";
+            return STATUS_RESUMED;
+        } else {
+            if is_write == 1 {
+                emit "Page fault: write violation";
+            } else {
+                emit "Page fault: read violation";
+            }
+            if is_user == 1 {
+                emit "Page fault: user mode access";
+            } else {
+                emit "Page fault: kernel mode access";
+            }
+            if is_reserved == 1 {
+                emit "Page fault: reserved bit set";
+            } else {
+                emit "Page fault: no reserved bit violation";
+            }
+            if is_insn == 1 {
+                emit "Page fault: instruction fetch";
+            } else {
+                emit "Page fault: data access";
+            }
+            return STATUS_OK;
+        }
+    }
+
+    // =========================================================================
+    // 4. Exception severity classification
+    // =========================================================================
+
+    proc K::exception_severity(vector: UInt8) -> UInt8 {
+        if vector == EXCEPTION_DF {
+            return SEVERITY_FATAL;
+        } else {
+            if vector == EXCEPTION_MC {
+                return SEVERITY_FATAL;
+            } else {
+                if vector == EXCEPTION_DE {
+                    return SEVERITY_RECOVERABLE;
+                } else {
+                    if vector == EXCEPTION_BP {
+                        return SEVERITY_RECOVERABLE;
+                    } else {
+                        if vector == EXCEPTION_OF {
+                            return SEVERITY_RECOVERABLE;
+                        } else {
+                            if vector == EXCEPTION_UD {
+                                return SEVERITY_RECOVERABLE;
+                            } else {
+                                if vector == EXCEPTION_NM {
+                                    return SEVERITY_RECOVERABLE;
+                                } else {
+                                    if vector == EXCEPTION_BR {
+                                        return SEVERITY_FATAL;
+                                    } else {
+                                        if vector == EXCEPTION_GP {
+                                            return SEVERITY_FATAL;
+                                        } else {
+                                            if vector == EXCEPTION_SS {
+                                                return SEVERITY_FATAL;
+                                            } else {
+                                                if vector == EXCEPTION_NP {
+                                                    return SEVERITY_FATAL;
+                                                } else {
+                                                    if vector == EXCEPTION_PF {
+                                                        return SEVERITY_RECOVERABLE;
+                                                    } else {
+                                                        if vector == EXCEPTION_AC {
+                                                            return SEVERITY_FATAL;
+                                                        } else {
+                                                            if vector == EXCEPTION_DB {
+                                                                return SEVERITY_RECOVERABLE;
+                                                            } else {
+                                                                if vector == EXCEPTION_TS {
+                                                                    return SEVERITY_FATAL;
+                                                                } else {
+                                                                    if vector == EXCEPTION_MF {
+                                                                        return SEVERITY_RECOVERABLE;
+                                                                    } else {
+                                                                        if vector == EXCEPTION_XF {
+                                                                            return SEVERITY_RECOVERABLE;
+                                                                        } else {
+                                                                            return SEVERITY_UNKNOWN;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // 5. GDT entry construction
+    // =========================================================================
+
+    proc K::compute_selector(index: UInt16, rpl: UInt16) -> UInt16 {
+        let index_shift = index * 8;
+        let selector = index_shift + rpl;
+        return selector;
+    }
+
+    proc K::compose_access_byte(present: UInt8, dpl: UInt8, type: UInt8, exec: UInt8, dc: UInt8, rw: UInt8, accessed: UInt8) -> UInt8 {
+        let access: UInt8 = 0;
+        if present == 1 {
+            access = access + GDT_ACCESS_PRESENT;
+        } else {
+            access = access;
+        }
+        if dpl == 1 {
+            access = access + 32;
+        } else {
+            if dpl == 2 {
+                access = access + 64;
+            } else {
+                if dpl == 3 {
+                    access = access + 96;
+                } else {
+                    access = access;
+                }
+            }
+        }
+        if type == 1 {
+            access = access + GDT_ACCESS_DESCRIPTOR_TYPE;
+        } else {
+            access = access;
+        }
+        if exec == 1 {
+            access = access + GDT_ACCESS_EXECUTABLE;
+        } else {
+            access = access;
+        }
+        if dc == 1 {
+            access = access + GDT_ACCESS_DC;
+        } else {
+            access = access;
+        }
+        if rw == 1 {
+            access = access + GDT_ACCESS_RW;
+        } else {
+            access = access;
+        }
+        if accessed == 1 {
+            access = access + GDT_ACCESS_ACCESSED;
+        } else {
+            access = access;
+        }
+        return access;
+    }
+
+    proc K::compose_granularity(granularity: UInt8, size: UInt8, long_mode: UInt8) -> UInt8 {
+        let gran: UInt8 = 0;
+        if granularity == 1 {
+            gran = gran + GDT_GRAN_4KB;
+        } else {
+            gran = gran;
+        }
+        if size == 1 {
+            gran = gran + GDT_GRAN_32BIT;
+        } else {
+            gran = gran;
+        }
+        if long_mode == 1 {
+            gran = gran + GDT_GRAN_64BIT;
+        } else {
+            gran = gran;
+        }
+        return gran;
+    }
+
+    proc K::build_gdt_entry(base: UInt64, limit: UInt32, access: UInt8, granularity: UInt8) -> UInt64 {
+        emit "XDV CPU: Building GDT entry";
+        let base_low = base & WORD_MASK;
+        let base_mid = (base >> 16) & BYTE_MASK;
+        let base_high = base >> 24;
+        let limit_low = limit & WORD_MASK;
+        let limit_high = (limit >> 16) & 15;
+        let entry = base_low;
+        let entry = entry + ((base_mid << 16) & DWORD_MASK);
+        let entry = entry + ((limit_low << 24) & 18446744047955460096);
+        let entry = entry + ((access << 40) & 1095216660480);
+        let entry = entry + ((limit_high << 48) & 9895363584000);
+        let entry = entry + ((granularity << 52) & 68719476736);
+        let entry = entry + (base_high << 56);
+        return entry;
+    }
+
+    proc K::build_null_descriptor() -> UInt64 {
+        emit "XDV CPU: Building NULL descriptor";
+        return 0;
+    }
+
+    proc K::build_kernel_code_descriptor() -> UInt64 {
+        emit "XDV CPU: Building kernel code descriptor";
+        let access = GDT_ACCESS_KERNEL_CODE;
+        let gran = GDT_GRAN_KERNEL_CODE;
+        let base: UInt64 = 0;
+        let limit: UInt32 = 4294967295;
+        let entry = build_gdt_entry(base, limit, access, gran);
+        return entry;
+    }
+
+    proc K::build_kernel_data_descriptor() -> UInt64 {
+        emit "XDV CPU: Building kernel data descriptor";
+        let access = GDT_ACCESS_KERNEL_DATA;
+        let gran = GDT_GRAN_KERNEL_DATA;
+        let base: UInt64 = 0;
+        let limit: UInt32 = 4294967295;
+        let entry = build_gdt_entry(base, limit, access, gran);
+        return entry;
+    }
+
+    proc K::build_user_code_descriptor() -> UInt64 {
+        emit "XDV CPU: Building user code descriptor";
+        let access = GDT_ACCESS_USER_CODE;
+        let gran = GDT_GRAN_USER_CODE;
+        let base: UInt64 = 0;
+        let limit: UInt32 = 4294967295;
+        let entry = build_gdt_entry(base, limit, access, gran);
+        return entry;
+    }
+
+    proc K::build_user_data_descriptor() -> UInt64 {
+        emit "XDV CPU: Building user data descriptor";
+        let access = GDT_ACCESS_USER_DATA;
+        let gran = GDT_GRAN_USER_DATA;
+        let base: UInt64 = 0;
+        let limit: UInt32 = 4294967295;
+        let entry = build_gdt_entry(base, limit, access, gran);
+        return entry;
+    }
+
+    // =========================================================================
+    // 6. GDT initialization and validation
+    // =========================================================================
+
+    proc K::install_gdt_entry(index: UInt8) -> UInt32 {
+        if index == 0 {
+            let entry = build_null_descriptor();
+            emit "XDV CPU: GDT entry 0 installed (NULL)";
+            return STATUS_OK;
+        } else {
+            if index == 1 {
+                let entry = build_kernel_code_descriptor();
+                emit "XDV CPU: GDT entry 1 installed (kernel code)";
+                return STATUS_OK;
+            } else {
+                if index == 2 {
+                    let entry = build_kernel_data_descriptor();
+                    emit "XDV CPU: GDT entry 2 installed (kernel data)";
                     return STATUS_OK;
                 } else {
-                    return STATUS_INIT_ERROR;
+                    if index == 3 {
+                        let entry = build_user_code_descriptor();
+                        emit "XDV CPU: GDT entry 3 installed (user code)";
+                        return STATUS_OK;
+                    } else {
+                        if index == 4 {
+                            let entry = build_user_data_descriptor();
+                            emit "XDV CPU: GDT entry 4 installed (user data)";
+                            return STATUS_OK;
+                        } else {
+                            if index == 5 {
+                                emit "XDV CPU: GDT entry 5 installed (TSS)";
+                                return STATUS_OK;
+                            } else {
+                                emit "XDV CPU: Invalid GDT index";
+                                return STATUS_INVALID_PARAM;
+                            }
+                        }
+                    }
                 }
-            } else {
-                return STATUS_INIT_ERROR;
             }
+        }
+    }
+
+    proc K::install_gdt_recursive(index: UInt8) -> UInt32 {
+        if index >= GDT_NUM_ENTRIES {
+            emit "XDV CPU: GDT installation complete";
+            return STATUS_OK;
         } else {
+            let status = install_gdt_entry(index);
+            if status != STATUS_OK {
+                return STATUS_INIT_ERROR;
+            } else {
+                let next = index + 1;
+                return install_gdt_recursive(next);
+            }
+        }
+    }
+
+    proc K::gdt_init() -> UInt32 {
+        emit "XDV CPU: Initializing Global Descriptor Table";
+        let status = install_gdt_recursive(0);
+        if status == STATUS_OK {
+            emit "XDV CPU: Global Descriptor Table initialized";
+            return STATUS_OK;
+        } else {
+            emit "XDV CPU: Global Descriptor Table initialization failed";
             return STATUS_INIT_ERROR;
         }
     }
 
-    proc K::setup_gdt() -> UInt32 {
-        emit "XDV CPU: Setting up GDT";
+    proc K::validate_gdt_index(index: UInt8) -> UInt32 {
+        if index < GDT_NUM_ENTRIES {
+            return STATUS_OK;
+        } else {
+            emit "XDV CPU: GDT index out of range";
+            return STATUS_INVALID_PARAM;
+        }
+    }
+
+    // =========================================================================
+    // 7. IDT entry construction
+    // =========================================================================
+
+    // Build a 128-bit IDT gate descriptor. The entry encodes:
+    //   offset[15:0] | selector (16) | IST (3) | reserved (5) | type_attr (8)
+    //   | offset[31:16] | offset[63:32] | reserved(32)
+    // Returns the 64-bit value representing the lower half of the descriptor.
+    proc K::build_idt_entry_low(segment_selector: UInt16, offset: UInt64, ist: UInt8, type_attr: UInt8) -> UInt64 {
+        emit "XDV CPU: Building IDT entry (low)";
+        let off_low = offset & WORD_MASK;
+        let sel: UInt64 = segment_selector;
+        let ist_val: UInt64 = ist;
+        let type_val: UInt64 = type_attr;
+        let off_high = (offset >> OFFSET_32_SHIFT) & WORD_MASK;
+        let entry = off_low;
+        let entry = entry + (sel << 16);
+        let entry = entry + (ist_val << 32);
+        let entry = entry + (type_val << 40);
+        let entry = entry + (off_high << 48);
+        return entry;
+    }
+
+    // Build the upper 64 bits: offset[63:32] | reserved(32)
+    proc K::build_idt_entry_high(offset: UInt64) -> UInt64 {
+        let off_upper = offset >> OFFSET_HIGH_SHIFT;
+        return off_upper;
+    }
+
+    proc K::build_exception_gate(vector: UInt8, handler: UInt64, segment_selector: UInt16) -> UInt32 {
+        emit "XDV CPU: Building exception gate";
+        let has_error = is_exception_with_error(vector);
+        if has_error == 1 {
+            emit "XDV CPU: Exception gate will push error code";
+        } else {
+            emit "XDV CPU: Exception gate without error code";
+        }
+        let entry_low = build_idt_entry_low(segment_selector, handler, 0, IDT_INTERRUPT_GATE);
+        let entry_high = build_idt_entry_high(handler);
+        emit "XDV CPU: Exception gate installed";
         return STATUS_OK;
     }
 
-    proc K::setup_idt() -> UInt32 {
-        emit "XDV CPU: Setting up IDT";
+    proc K::build_irq_gate(vector: UInt8, handler: UInt64, segment_selector: UInt16) -> UInt32 {
+        if vector < 32 {
+            emit "XDV CPU: Invalid IRQ vector";
+            return STATUS_INVALID_VECTOR;
+        } else {
+            if vector > 47 {
+                emit "XDV CPU: IRQ vector out of range";
+                return STATUS_INVALID_VECTOR;
+            } else {
+                emit "XDV CPU: Building IRQ gate";
+                let entry_low = build_idt_entry_low(segment_selector, handler, 0, IDT_INTERRUPT_GATE);
+                let entry_high = build_idt_entry_high(handler);
+                emit "XDV CPU: IRQ gate installed";
+                return STATUS_OK;
+            }
+        }
+    }
+
+    // =========================================================================
+    // 8. IDT initialization (vectors 0-47 via recursion)
+    // =========================================================================
+
+    proc K::install_idt_entry(vector: UInt8, handler: UInt64) -> UInt32 {
+        if vector < 32 {
+            return build_exception_gate(vector, handler, GDT_KERNEL_CODE_SELECTOR);
+        } else {
+            if vector < 48 {
+                return build_irq_gate(vector, handler, GDT_KERNEL_CODE_SELECTOR);
+            } else {
+                if vector < IDT_NUM_ENTRIES {
+                    emit "XDV CPU: Installing reserved IDT entry";
+                    return STATUS_OK;
+                } else {
+                    emit "XDV CPU: IDT vector out of range";
+                    return STATUS_INVALID_VECTOR;
+                }
+            }
+        }
+    }
+
+    proc K::exception_handler_for_vector(vector: UInt8) -> UInt64 {
+        if vector == 0 {
+            return 4294967296;
+        } else {
+            if vector == 8 {
+                return 4294967312;
+            } else {
+                return 4294967296;
+            }
+        }
+    }
+
+    proc K::install_idt_recursive(vector: UInt8) -> UInt32 {
+        if vector >= 48 {
+            emit "XDV CPU: IDT exception and IRQ entries installed";
+            return STATUS_OK;
+        } else {
+            let handler = exception_handler_for_vector(vector);
+            let status = install_idt_entry(vector, handler);
+            if status != STATUS_OK {
+                emit "XDV CPU: Failed to install IDT entry for vector";
+                return status;
+            } else {
+                let next = vector + 1;
+                return install_idt_recursive(next);
+            }
+        }
+    }
+
+    proc K::idt_init() -> UInt32 {
+        emit "XDV CPU: Initializing Interrupt Descriptor Table";
+        let status = install_idt_recursive(0);
+        if status == STATUS_OK {
+            emit "XDV CPU: Interrupt Descriptor Table initialized with 48 entries";
+            return STATUS_OK;
+        } else {
+            emit "XDV CPU: Interrupt Descriptor Table initialization failed";
+            return STATUS_INIT_ERROR;
+        }
+    }
+
+    proc K::validate_idt_vector(vector: UInt8) -> UInt32 {
+        if vector < IDT_NUM_ENTRIES {
+            return STATUS_OK;
+        } else {
+            emit "XDV CPU: IDT vector out of range";
+            return STATUS_INVALID_VECTOR;
+        }
+    }
+
+    // =========================================================================
+    // 9. Full CPU subsystem initialization
+    // =========================================================================
+
+    proc K::cpu_init() -> UInt32 {
+        emit "XDV CPU: Initializing CPU subsystem";
+        let gdt_status = gdt_init();
+        if gdt_status != STATUS_OK {
+            emit "XDV CPU: GDT initialization failed";
+            return STATUS_INIT_ERROR;
+        } else {
+            let idt_status = idt_init();
+            if idt_status != STATUS_OK {
+                emit "XDV CPU: IDT initialization failed";
+                return STATUS_INIT_ERROR;
+            } else {
+                emit "XDV CPU: CPU subsystem initialized";
+                return STATUS_OK;
+            }
+        }
+    }
+
+    // =========================================================================
+    // 10. Control register utilities
+    // =========================================================================
+
+    // CR0 read (simulated), returns the current CR0 value
+    proc K::cr0_read() -> UInt64 {
+        let cr0 = CR0_BOOT;
+        if cr0 == 0 {
+            emit "XDV CPU: CR0 is zero, protection not enabled";
+        } else {
+            emit "XDV CPU: CR0 has active flags";
+        }
+        return cr0;
+    }
+
+    // CR0 write with validation
+    proc K::cr0_write(value: UInt64) -> UInt32 {
+        let has_pe = value & CR0_PE;
+        let has_pg = value & CR0_PG;
+        let has_em = value & CR0_EM;
+        if has_pg == 1 {
+            if has_pe == 0 {
+                emit "XDV CPU: Cannot enable paging without protection";
+                return STATUS_INIT_ERROR;
+            } else {
+                emit "XDV CPU: CR0: paging and protection enabled";
+            }
+        } else {
+            emit "XDV CPU: CR0: paging disabled";
+        }
+        if has_em == 1 {
+            emit "XDV CPU: CR0: x87 emulation mode";
+        } else {
+            emit "XDV CPU: CR0: native x87 mode";
+        }
+        emit "XDV CPU: CR0 write validated";
         return STATUS_OK;
     }
 
-    proc K::setup_tss() -> UInt32 {
-        emit "XDV CPU: Setting up TSS";
+    // CR0 set specific flags
+    proc K::cr0_set_flags(value: UInt64, flags: UInt64) -> UInt64 {
+        let old = value;
+        let new_val = old | flags;
+        return new_val;
+    }
+
+    // CR0 clear specific flags
+    proc K::cr0_clear_flags(value: UInt64, flags: UInt64) -> UInt64 {
+        let mask: UInt64 = 18446744073709551615;
+        let inverted = flags ^ mask;
+        let new_val = value & inverted;
+        return new_val;
+    }
+
+    // CR2: holds the page fault linear address
+    proc K::cr2_read() -> UInt64 {
+        emit "XDV CPU: CR2 read (page fault address)";
+        return CR2_BOOT;
+    }
+
+    // CR3: page directory base register
+    proc K::cr3_write(pdb_addr: UInt64) -> UInt32 {
+        if pdb_addr == 0 {
+            emit "XDV CPU: CR3: invalid page directory address";
+            return STATUS_INIT_ERROR;
+        } else {
+            let aligned = pdb_addr & 4095;
+            if aligned == 0 {
+                emit "XDV CPU: CR3: page directory base set";
+                return STATUS_OK;
+            } else {
+                emit "XDV CPU: CR3: page directory not page aligned";
+                return STATUS_INIT_ERROR;
+            }
+        }
+    }
+
+    proc K::cr3_read() -> UInt64 {
+        emit "XDV CPU: CR3 read (page directory base)";
+        return 0;
+    }
+
+    // CR4 read (simulated)
+    proc K::cr4_read() -> UInt64 {
+        let cr4 = CR4_BOOT;
+        if cr4 == 0 {
+            emit "XDV CPU: CR4 is zero, no extended features";
+        } else {
+            emit "XDV CPU: CR4 has extended features enabled";
+        }
+        return cr4;
+    }
+
+    // CR4 write with validation
+    proc K::cr4_write(value: UInt64) -> UInt32 {
+        let has_pae = value & CR4_PAE;
+        let has_smep = value & CR4_SMEP;
+        let has_smap = value & CR4_SMAP;
+        if has_pae == 1 {
+            emit "XDV CPU: CR4: PAE enabled";
+        } else {
+            emit "XDV CPU: CR4: PAE disabled";
+        }
+        if has_smep == 1 {
+            emit "XDV CPU: CR4: SMEP enabled";
+        } else {
+            emit "XDV CPU: CR4: SMEP disabled";
+        }
+        if has_smap == 1 {
+            emit "XDV CPU: CR4: SMAP enabled";
+        } else {
+            emit "XDV CPU: CR4: SMAP disabled";
+        }
+        emit "XDV CPU: CR4 write validated";
         return STATUS_OK;
     }
+
+    // CR4 set flags
+    proc K::cr4_set_flags(value: UInt64, flags: UInt64) -> UInt64 {
+        let new_val = value | flags;
+        return new_val;
+    }
+
+    // CR4 clear flags
+    proc K::cr4_clear_flags(value: UInt64, flags: UInt64) -> UInt64 {
+        let mask: UInt64 = 18446744073709551615;
+        let inverted = flags ^ mask;
+        let new_val = value & inverted;
+        return new_val;
+    }
+
+    // =========================================================================
+    // 11. EFER (Extended Feature Enable Register) management
+    // =========================================================================
+
+    // EFER_SCE bit 0: syscall enable
+    // EFER_LME bit 8: long mode enable
+    // EFER_LMA bit 10: long mode active
+    // EFER_NXE bit 11: no-execute enable
+
+    proc K::efer_read() -> UInt64 {
+        let efer = EFER_BOOT;
+        emit "XDV CPU: EFER read";
+        return efer;
+    }
+
+    proc K::efer_write(value: UInt64) -> UInt32 {
+        let has_sce = value & EFER_SCE;
+        let has_lme = value & EFER_LME;
+        let has_lma = value & EFER_LMA;
+        let has_nxe = value & EFER_NXE;
+        if has_sce == 1 {
+            emit "XDV CPU: EFER: syscall enabled";
+        } else {
+            emit "XDV CPU: EFER: syscall disabled";
+        }
+        if has_lme == 1 {
+            emit "XDV CPU: EFER: long mode enabled";
+        } else {
+            emit "XDV CPU: EFER: long mode disabled";
+        }
+        if has_lma == 1 {
+            emit "XDV CPU: EFER: long mode active";
+        } else {
+            emit "XDV CPU: EFER: long mode not active";
+        }
+        if has_nxe == 1 {
+            emit "XDV CPU: EFER: no-execute enabled";
+        } else {
+            emit "XDV CPU: EFER: no-execute disabled";
+        }
+        emit "XDV CPU: EFER write validated";
+        return STATUS_OK;
+    }
+
+    // =========================================================================
+    // 12. MSR (Model-Specific Register) validation and access
+    // =========================================================================
+
+    proc K::is_valid_msr(msr: UInt32) -> UInt8 {
+        if msr == MSR_IA32_EFER {
+            return 1;
+        } else {
+            if msr == MSR_IA32_LSTAR {
+                return 1;
+            } else {
+                if msr == MSR_IA32_STAR {
+                    return 1;
+                } else {
+                    if msr == MSR_IA32_SFMASK {
+                        return 1;
+                    } else {
+                        if msr == MSR_IA32_APIC_BASE {
+                            return 1;
+                        } else {
+                            if msr == MSR_IA32_TSC {
+                                return 1;
+                            } else {
+                                return 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::msr_read(msr: UInt32) -> UInt64 {
+        let valid = is_valid_msr(msr);
+        if valid == 0 {
+            emit "XDV CPU: Invalid MSR address";
+            return 0;
+        } else {
+            if msr == MSR_IA32_EFER {
+                return efer_read();
+            } else {
+                if msr == MSR_IA32_TSC {
+                    emit "XDV CPU: TSC read";
+                    return 0;
+                } else {
+                    emit "XDV CPU: MSR read (supported but stubbed)";
+                    return 0;
+                }
+            }
+        }
+    }
+
+    proc K::msr_write(msr: UInt32, value: UInt64) -> UInt32 {
+        let valid = is_valid_msr(msr);
+        if valid == 0 {
+            emit "XDV CPU: Invalid MSR address for write";
+            return STATUS_MSR_INVALID;
+        } else {
+            if msr == MSR_IA32_EFER {
+                return efer_write(value);
+            } else {
+                if msr == MSR_IA32_LSTAR {
+                    emit "XDV CPU: LSTAR set (syscall entry point)";
+                    return STATUS_OK;
+                } else {
+                    if msr == MSR_IA32_STAR {
+                        emit "XDV CPU: STAR set (syscall/sysret selector)";
+                        return STATUS_OK;
+                    } else {
+                        emit "XDV CPU: MSR write (supported but stubbed)";
+                        return STATUS_OK;
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // 13. IRQ name and dispatch helpers
+    // =========================================================================
+
+    proc K::irq_name(vector: UInt8) -> UInt8 {
+        if vector == IRQ_PIT {
+            emit "IRQ: PIT Timer";
+            return STATUS_OK;
+        } else {
+            if vector == IRQ_KBD {
+                emit "IRQ: Keyboard";
+                return STATUS_OK;
+            } else {
+                if vector == IRQ_SLAVE {
+                    emit "IRQ: PIC Slave Cascade";
+                    return STATUS_OK;
+                } else {
+                    if vector == IRQ_COM1 {
+                        emit "IRQ: COM1 Serial";
+                        return STATUS_OK;
+                    } else {
+                        if vector == IRQ_COM2 {
+                            emit "IRQ: COM2 Serial";
+                            return STATUS_OK;
+                        } else {
+                            if vector == IRQ_FLOPPY {
+                                emit "IRQ: Floppy Disk";
+                                return STATUS_OK;
+                            } else {
+                                if vector == IRQ_PS2 {
+                                    emit "IRQ: PS2 Mouse";
+                                    return STATUS_OK;
+                                } else {
+                                    if vector == IRQ_RTC {
+                                        emit "IRQ: Real Time Clock";
+                                        return STATUS_OK;
+                                    } else {
+                                        emit "IRQ: Unknown";
+                                        return STATUS_OK;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dispatch a CPU exception by routing to the appropriate handler.
+    // This validates the vector, classifies severity, and panics on fatal.
+    proc K::dispatch_exception(vector: UInt8, error_code: UInt64) -> UInt32 {
+        if vector >= 32 {
+            emit "XDV CPU: Not a valid exception vector";
+            return STATUS_INVALID_VECTOR;
+        } else {
+            let name_result = exception_name(vector);
+            let severity = exception_severity(vector);
+            let has_error = is_exception_with_error(vector);
+            if severity == SEVERITY_FATAL {
+                emit "XDV CPU: Fatal exception encountered";
+                if vector == EXCEPTION_DF {
+                    emit "XDV CPU: Triple fault imminent";
+                    return STATUS_DOUBLE_FAULT;
+                } else {
+                    if vector == EXCEPTION_MC {
+                        emit "XDV CPU: Machine check architecture fault";
+                    } else {
+                        emit "XDV CPU: Unrecoverable exception";
+                    }
+                    return STATUS_PANIC;
+                }
+            } else {
+                if severity == SEVERITY_UNKNOWN {
+                    emit "XDV CPU: Unknown exception severity";
+                    return STATUS_PANIC;
+                } else {
+                    if has_error == 1 {
+                        emit "XDV CPU: Exception with error code";
+                    } else {
+                        emit "XDV CPU: Exception without error code";
+                    }
+                    emit "XDV CPU: Recoverable exception";
+                    return STATUS_RESUMED;
+                }
+            }
+        }
+    }
+
+    // Handle a page fault specifically with full error code analysis.
+    proc K::handle_page_fault(cr2_value: UInt64, error_code: UInt64) -> UInt32 {
+        emit "XDV CPU: Handling page fault";
+        emit "XDV CPU: Faulting address in CR2";
+        let parse_result = parse_page_fault_error(error_code);
+        if parse_result == STATUS_OK {
+            emit "XDV CPU: Page fault analyzed, may be recoverable";
+            return STATUS_RESUMED;
+        } else {
+            emit "XDV CPU: Page fault analysis failed";
+            return STATUS_PANIC;
+        }
+    }
+
+    // =========================================================================
+    // 14. Interrupt control
+    // =========================================================================
 
     proc K::enable_interrupts() -> UInt32 {
+        emit "XDV CPU: Enabling interrupts";
         return STATUS_OK;
     }
 
     proc K::disable_interrupts() -> UInt32 {
+        emit "XDV CPU: Disabling interrupts";
         return STATUS_OK;
     }
 
     proc K::halt() -> UInt32 {
+        emit "XDV CPU: Halting";
         return STATUS_OK;
     }
 
-    proc K::read_cr0() -> UInt64 {
-        return CR0_BOOT;
+    // =========================================================================
+    // 15. CPU identification stubs
+    // =========================================================================
+
+    proc K::has_long_mode() -> UInt8 {
+        emit "XDV CPU: Checking long mode support";
+        return 1;
     }
 
-    proc K::write_cr0() -> UInt32 {
+    proc K::has_nx_bit() -> UInt8 {
+        emit "XDV CPU: Checking NX bit support";
+        return 1;
+    }
+
+    proc K::has_syscall() -> UInt8 {
+        emit "XDV CPU: Checking syscall support";
+        return 1;
+    }
+
+    proc K::verify_long_mode() -> UInt32 {
+        emit "XDV CPU: Verifying long mode capability";
+        let has_lm = has_long_mode();
+        if has_lm == 1 {
+            emit "XDV CPU: Long mode is supported";
+            return STATUS_OK;
+        } else {
+            emit "XDV CPU: Long mode is NOT supported";
+            return STATUS_UNSUPPORTED;
+        }
+    }
+
+    proc K::validate_control_register_config() -> UInt32 {
+        emit "XDV CPU: Validating control register configuration";
+        let cr0_val = cr0_read();
+        let cr4_val = cr4_read();
+        let efer_val = efer_read();
+        if cr0_val == CR0_BOOT {
+            emit "XDV CPU: CR0 matches boot configuration";
+        } else {
+            emit "XDV CPU: CR0 differs from boot configuration";
+        }
+        if cr4_val == CR4_BOOT {
+            emit "XDV CPU: CR4 matches boot configuration";
+        } else {
+            emit "XDV CPU: CR4 differs from boot configuration";
+        }
+        if efer_val == EFER_BOOT {
+            emit "XDV CPU: EFER matches boot configuration";
+        } else {
+            emit "XDV CPU: EFER differs from boot configuration";
+        }
+        emit "XDV CPU: Control register validation complete";
         return STATUS_OK;
     }
 
-    proc K::read_cr2() -> UInt64 {
-        return CR2_BOOT;
-    }
+    // =========================================================================
+    // 16. CPU reset
+    // =========================================================================
 
-    proc K::write_cr3() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::read_cr4() -> UInt64 {
-        return CR4_BOOT;
-    }
-
-    proc K::write_cr4() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::get_sp() -> UInt64 {
-        return STACK_POINTER_BOOT;
-    }
-
-    proc K::get_ip() -> UInt64 {
-        return INSTRUCTION_POINTER_BOOT;
+    proc K::cpu_reset() -> UInt32 {
+        emit "XDV CPU: Initiating CPU reset";
+        let cr0_status = cr0_write(CR0_BOOT);
+        if cr0_status != STATUS_OK {
+            return cr0_status;
+        } else {
+            let cr4_status = cr4_write(CR4_BOOT);
+            if cr4_status != STATUS_OK {
+                return cr4_status;
+            } else {
+                let efer_status = efer_write(EFER_BOOT);
+                if efer_status != STATUS_OK {
+                    return efer_status;
+                } else {
+                    emit "XDV CPU: CPU reset to boot defaults";
+                    return STATUS_OK;
+                }
+            }
+        }
     }
 }

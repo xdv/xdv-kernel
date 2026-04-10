@@ -2,103 +2,264 @@
 // Copyright (c) 2026 Dust LLC, and Contributors
 // Description:
 //   XDV Kernel - Observability & Deterministic Trace Layer (ODT)
+//   Provides ring-buffer trace log with hash-chain integrity, per-domain
+//   telemetry collectors, replay support (XDV-071), and system diagnostics.
 
 forge XdvOdt {
 
+    // ================================================================
+    // Event types (XDV-071 Deterministic Replay)
+    // ================================================================
+    const EVT_NONE: UInt8 = 0;
+    const EVT_SCHEDULE_DECISION: UInt8 = 1;
+    const EVT_DOMAIN_TRANSITION: UInt8 = 2;
+    const EVT_CAPABILITY_ISSUE: UInt8 = 3;
+    const EVT_MEMORY_ALLOC: UInt8 = 4;
+    const EVT_PROCESS_LIFECYCLE: UInt8 = 5;
+    const EVT_FAULT: UInt8 = 6;
+    const EVT_TELEMETRY: UInt8 = 7;
+    const EVT_COHERENCE_CHANGE: UInt8 = 8;
+
+    // ================================================================
+    // Domain identifiers (XDV-071)
+    // ================================================================
+    const DOMAIN_K: UInt8 = 0;
+    const DOMAIN_Q: UInt8 = 1;
+    const DOMAIN_PHI: UInt8 = 2;
+
+    // ================================================================
+    // Status codes
+    // ================================================================
     const STATUS_OK: UInt32 = 0;
     const STATUS_NO_DATA: UInt32 = 1;
+    const STATUS_BUFFER_FULL: UInt32 = 2;
+    const STATUS_INTEGRITY_FAIL: UInt32 = 3;
+    const STATUS_INVALID_ENTRY: UInt32 = 4;
+    const STATUS_REPLAY_MISMATCH: UInt32 = 5;
+    const STATUS_INVALID_DOMAIN: UInt32 = 6;
+    const STATUS_INVALID_EVENT: UInt32 = 7;
+    const STATUS_INDEX_OUT_OF_BOUNDS: UInt32 = 8;
+    const STATUS_OVERFLOW: UInt32 = 9;
+    const STATUS_REPLAY_ACTIVE: UInt32 = 10;
 
+    // ================================================================
+    // Ring buffer topology — 8192 entries
+    // ================================================================
     const TRACE_BUFFER_CAPACITY: UInt32 = 8192;
+    const BUFFER_MASK: UInt32 = 8191;
 
-    proc K::odt_init() -> UInt32 {
-        emit "XDV ODT: Initializing observability and trace layer";
-        init_trace_system();
-        init_telemetry_collectors();
-        init_diagnostics();
-        emit "XDV ODT: Observability and trace layer initialized";
-        return STATUS_OK;
-    }
+    // ================================================================
+    // Transition history ring buffer
+    // ================================================================
+    const TRANSITION_HISTORY_SIZE: UInt32 = 256;
+    const TRANSITION_MASK: UInt32 = 255;
 
-    proc K::init_trace_system() -> UInt32 {
-        emit "XDV ODT: Initializing trace system";
-        return STATUS_OK;
-    }
+    // ================================================================
+    // Hash chain constants
+    // ================================================================
+    const HASH_MULTIPLIER_HI: UInt64 = 1479960806;
+    const HASH_MULTIPLIER_LO: UInt64 = 3442920581;
+    const HASH_MAGIC: UInt64 = 1442695040888963407;
+    const HASH_MOD_PRIME: UInt64 = 2000000000000099;
 
-    proc K::init_telemetry_collectors() -> UInt32 {
-        emit "XDV ODT: Initializing telemetry collectors";
-        return STATUS_OK;
-    }
+    // ================================================================
+    // Replay mode flags
+    // ================================================================
+    const REPLAY_MODE_OFF: UInt32 = 0;
+    const REPLAY_MODE_RECORD: UInt32 = 1;
+    const REPLAY_MODE_REPLAY: UInt32 = 2;
+    const REPLAY_MODE_VERIFY: UInt32 = 3;
 
-    proc K::init_diagnostics() -> UInt32 {
-        emit "XDV ODT: Initializing diagnostics";
-        return STATUS_OK;
-    }
+    // ================================================================
+    // Health thresholds
+    // ================================================================
+    const HEALTH_OK: UInt32 = 0;
+    const HEALTH_DEGRADED: UInt32 = 1;
+    const HEALTH_CRITICAL: UInt32 = 2;
+    const HEALTH_FAULT_RATIO_LIMIT: UInt32 = 100;
+    const HEALTH_DECOHERENCE_LIMIT: UInt32 = 50;
+    const HEALTH_COHERENCE_MISS_LIMIT: UInt32 = 200;
+    const HEALTH_QUEUE_DEPTH_LIMIT: UInt32 = 256;
+    const HEALTH_OVERFLOW_WARN: UInt32 = 10;
 
-    proc K::log_trace_event(event_code: UInt32) -> UInt32 {
-        if event_code == 0 {
-            return STATUS_NO_DATA;
+    // ================================================================
+    // Telemetry token packing factors
+    // ================================================================
+    const K_CYCLES_FACTOR: UInt64 = 1000000000000;
+    const K_FAULTS_FACTOR: UInt64 = 100000000;
+    const K_SCHED_FACTOR: UInt64 = 1;
+    const Q_DECOHERE_FACTOR: UInt64 = 1000000000000;
+    const Q_MEASURE_FACTOR: UInt64 = 100000000;
+    const Q_DEPTH_FACTOR: UInt64 = 1;
+    const PHI_HITS_FACTOR: UInt64 = 1000000000000;
+    const PHI_MISSES_FACTOR: UInt64 = 100000000;
+    const PHI_XFORM_FACTOR: UInt64 = 10000;
+    const PHI_WEXP_FACTOR: UInt64 = 1;
+
+    // ================================================================
+    // Trace statistics packing
+    // ================================================================
+    const STATS_WRITTEN_FACTOR: UInt64 = 1000000000000;
+    const STATS_OVERFLOW_FACTOR: UInt64 = 1000000;
+    const STATS_INTERR_FACTOR: UInt64 = 1;
+
+    // ================================================================
+    // Audit event codes
+    // ================================================================
+    const AUDIT_TRACE_WRITE: UInt32 = 100;
+    const AUDIT_OVERFLOW: UInt32 = 101;
+    const AUDIT_INTEGRITY_FAIL: UInt32 = 102;
+    const AUDIT_REPLAY_MISMATCH: UInt32 = 103;
+    const AUDIT_TRANSITION: UInt32 = 104;
+
+    // ================================================================
+    // normalize_u64 — modular reduction (from xdv-sdbm)
+    // ================================================================
+    proc K::normalize_u64(value: UInt64, cycle: UInt64) -> UInt64 {
+        if cycle == 0 {
+            return 0;
         } else {
-            return STATUS_OK;
+            let quotient = value / cycle;
+            return value - (quotient * cycle);
         }
     }
 
-    proc K::log_domain_transition(source_domain: UInt8, target_domain: UInt8) -> UInt32 {
-        if source_domain == target_domain {
-            return STATUS_NO_DATA;
+    // ================================================================
+    // Ring buffer circular indexing
+    // ================================================================
+    proc K::wrap_index(raw_index: UInt32) -> UInt32 {
+        return raw_index & BUFFER_MASK;
+    }
+
+    proc K::wrap_transition_index(raw_index: UInt32) -> UInt32 {
+        return raw_index & TRANSITION_MASK;
+    }
+
+    proc K::increment_with_wrap(current: UInt32) -> UInt32 {
+        let next = current + 1;
+        if next >= TRACE_BUFFER_CAPACITY {
+            return wrap_index(next);
         } else {
-            return STATUS_OK;
+            return next;
         }
     }
 
-    proc K::collect_k_telemetry() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::collect_q_telemetry() -> UInt32 {
-        return STATUS_NO_DATA;
-    }
-
-    proc K::collect_phi_telemetry() -> UInt32 {
-        return STATUS_NO_DATA;
-    }
-
-    proc K::get_q_diagnostics() -> UInt32 {
-        return STATUS_NO_DATA;
-    }
-
-    proc K::get_phi_diagnostics() -> UInt32 {
-        return STATUS_NO_DATA;
-    }
-
-    proc K::get_system_health() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::get_trace_stats() -> UInt32 {
-        return TRACE_BUFFER_CAPACITY;
-    }
-
-    proc K::query_trace_events() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::get_transition_history() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::export_trace_data() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::clear_trace_buffer() -> UInt32 {
-        return STATUS_OK;
-    }
-
-    proc K::set_telemetry_interval(ms: UInt32) -> UInt32 {
-        if ms == 0 {
-            return STATUS_NO_DATA;
+    proc K::increment_transition_with_wrap(current: UInt32) -> UInt32 {
+        let next = current + 1;
+        if next >= TRANSITION_HISTORY_SIZE {
+            return wrap_transition_index(next);
         } else {
-            return STATUS_OK;
+            return next;
         }
     }
-}
+
+    proc K::linear_to_buffer(base: UInt32, offset: UInt32) -> UInt32 {
+        let abs = base + offset;
+        return wrap_index(abs);
+    }
+
+    // ================================================================
+    // Event type validation (deep if-else chain — XDV style)
+    // ================================================================
+    proc K::is_event_type_valid(event_type: UInt8) -> UInt32 {
+        if event_type == EVT_NONE {
+            return STATUS_OK;
+        } else {
+            if event_type == EVT_SCHEDULE_DECISION {
+                return STATUS_OK;
+            } else {
+                if event_type == EVT_DOMAIN_TRANSITION {
+                    return STATUS_OK;
+                } else {
+                    if event_type == EVT_CAPABILITY_ISSUE {
+                        return STATUS_OK;
+                    } else {
+                        if event_type == EVT_MEMORY_ALLOC {
+                            return STATUS_OK;
+                        } else {
+                            if event_type == EVT_PROCESS_LIFECYCLE {
+                                return STATUS_OK;
+                            } else {
+                                if event_type == EVT_FAULT {
+                                    return STATUS_OK;
+                                } else {
+                                    if event_type == EVT_TELEMETRY {
+                                        return STATUS_OK;
+                                    } else {
+                                        if event_type == EVT_COHERENCE_CHANGE {
+                                            return STATUS_OK;
+                                        } else {
+                                            return STATUS_INVALID_EVENT;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::is_domain_valid(domain: UInt8) -> UInt32 {
+        if domain == DOMAIN_K {
+            return STATUS_OK;
+        } else {
+            if domain == DOMAIN_Q {
+                return STATUS_OK;
+            } else {
+                if domain == DOMAIN_PHI {
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INVALID_DOMAIN;
+                }
+            }
+        }
+    }
+
+    proc K::is_domain_valid_u32(domain: UInt32) -> UInt32 {
+        if domain == 0 {
+            return STATUS_OK;
+        } else {
+            if domain == 1 {
+                return STATUS_OK;
+            } else {
+                if domain == 2 {
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INVALID_DOMAIN;
+                }
+            }
+        }
+    }
+
+    // ================================================================
+    // Trace entry token encoding
+    // entry_value = event_type(8) | domain(8) | detail(32) | ts_low(16)
+    // packed into UInt64 via multiplicative decomposition
+    // ================================================================
+    proc K::encode_entry_token(
+        event_type: UInt8,
+        domain: UInt8,
+        detail: UInt32,
+        timestamp: UInt64
+    ) -> UInt64 {
+        let ts_low = normalize_u64(timestamp, 65536);
+        let e64 = event_type;
+        let d64 = domain;
+        let dt64 = normalize_u64(detail, 4294967296);
+        let part_event = e64 * TOKEN_EVENT_FACTOR;
+        let part_domain = d64 * TOKEN_DOMAIN_FACTOR;
+        let part_detail = dt64 * TOKEN_DETAIL_FACTOR;
+        let part_ts = ts_low;
+        let token = part_event + part_domain + part_detail + part_ts;
+        if token == 0 {
+            return 1;
+        } else {
+            return token;
+        }
+    }
+
+    const TOKEN_EVENT_FACTOR: UInt64 = 100000000000000;
+    const TOKEN_DOMAIN_FACTOR: UInt64 = 1000000000000;
+    const TOKEN_DETAIL_FACTOR: UInt64 = 1000;
