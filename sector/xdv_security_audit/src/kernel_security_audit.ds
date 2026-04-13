@@ -1,0 +1,306 @@
+//! XDV Kernel: Security Audit Logging Sector
+//!
+//! Senior Developer Implementation: Production security audit & compliance
+//! Tracks security-relevant events for intrusion detection and forensics
+
+forge SecurityAudit {
+    
+    // Security event severity levels
+    const SEVERITY_LOW: u32 = 1;
+    const SEVERITY_MEDIUM: u32 = 2;
+    const SEVERITY_HIGH: u32 = 3;
+    const SEVERITY_CRITICAL: u32 = 4;
+    
+    // Event types for audit log
+    
+    // Capability violations
+    const EVENT_CAP_INVALID_DELEGATION: u32 = 0x1001;  // Invalid capability delegation
+    const EVENT_CAP_UNAUTHORIZED_ACCESS: u32 = 0x1002; // Access attempted without proper capability
+    const EVENT_CAP_ELEVATION_ATTEMPT: u32 = 0x1003;   // Attempt to escalate capability permissions
+    
+    // Memory safety violations
+    const EVENT_MEMORY_GUARD_VIOLATION: u32 = 0x2001;  // Accessed guard page
+    const EVENT_MEMORY_INVALID_RANGE: u32 = 0x2002;    // Invalid memory range access
+    const EVENT_MEMORY_DOUBLE_FREE: u32 = 0x2003;      // Double-free detected
+    const EVENT_MEMORY_CORRUPTION: u32 = 0x2004;       // Memory corruption detected
+    
+    // Boot/runtime security
+    const EVENT_BOOT_CONTRACT_VIOLATION: u32 = 0x3001; // Boot contract assertion failed
+    const EVENT_SPLIT_INTERFACE_MISMATCH: u32 = 0x3002; // Split interface version mismatch
+    const EVENT_RUNTIME_CORRUPTION: u32 = 0x3003;      // Runtime corruption detected
+    
+    // Domain security
+    const EVENT_DOMAIN_INVALID_TRANSITION: u32 = 0x4001; // Invalid domain transition attempted
+    const EVENT_DOMAIN_ESCALATION: u32 = 0x4002;          // Domain escalation attempted
+    
+    // Structure for security events
+    struct SecurityEvent {
+        event_id: u32,
+        severity: u32,
+        timestamp: u64,
+        pid: u32,
+        source_addr: u64,
+        affected_resource: u64,
+        context: @str,
+    }
+    
+    impl SecurityEvent {
+        fn new(event_id: u32, severity: u32, pid: u32, 
+               source_addr: u64, affected_resource: u64,
+               context: @str) -> Self {
+            Self {
+                event_id,
+                severity,
+                timestamp: K::get_cycle_count(),
+                pid,
+                source_addr,
+                affected_resource,
+                context,
+            }
+        }
+        
+        /// Generate log message
+        pub fn to_string(&self) -> @str {
+            @std::string::concat(
+                @"[SEC] ",
+                @"t", @std::str::from_u64(self.timestamp),
+                @" pid:", @std::str::from_u32(self.pid),
+                @" sev:", SecurityAudit::severity_name(self.severity),
+                @" evt:0x", @std::str::from_u32(self.event_id),
+                @" D: ", self.context
+            )
+        }
+    }
+    
+    /// Get severity name
+    proc K::severity_name(severity: u32) -> @str {
+        match severity {
+            SEVERITY_LOW => @"LOW",
+            SEVERITY_MEDIUM => @"MEDIUM",
+            SEVERITY_HIGH => @"HIGH",
+            SEVERITY_CRITICAL => @"CRITICAL",
+            _ => @"UNKNOWN",
+        }
+    }
+    
+    // Audit log ring buffer
+    forge AuditLog {
+        
+        const LOG_SIZE: usize = 1024;  // Ring buffer size
+        
+        static log_buffer: [SecurityEvent; LOG_SIZE] = 
+            [SecurityEvent::empty(); LOG_SIZE];
+        static log_head: u32 = 0;
+        static log_tail: u32 = 0;
+        static events_logged: u64 = 0;
+        static events_dropped: u64 = 0;
+        
+        impl SecurityEvent {
+            fn empty() -> Self {
+                Self {
+                    event_id: 0,
+                    severity: 0,
+                    timestamp: 0,
+                    pid: 0,
+                    source_addr: 0,
+                    affected_resource: 0,
+                    context: @"",
+                }
+            }
+        }
+        
+        /// Add event to audit log
+        pub proc K::audit_log(event: SecurityEvent) {
+            // Count (truncated for brevity)
+            let next = (log_tail + 1) % LOG_SIZE as u32;
+            
+            if next == log_head {
+                // Buffer full, drop oldest (count to wrap)
+                events_dropped = events_dropped.saturating_add(1);
+                log_head = (log_head + 1) % LOG_SIZE as u32;
+            }
+            
+            log_buffer[log_tail as usize] = event;
+            log_tail = next;
+            events_logged = events_logged.saturating_add(1);
+        }
+        
+        /// Log capability security event
+        pub proc K::audit_capability_event(event_type: u32, 
+                                            cap: xdv_sdk::Capability,
+                                            pid: u32, 
+                                            context: @str) {
+            let sev = K::event_severity(event_type);
+            
+            let event = SecurityEvent::new(
+                event_type,
+                sev,
+                pid,
+                cap.koid(),  // capability handle
+                pid as u64,   // affected task
+                context,
+            );
+            
+            K::audit_log(event);
+            
+            // Alert on critical events
+            if sev >= SEVERITY_HIGH {
+                K::security_alert(event);
+            }
+        }
+    }
+    
+    /// Alert generation for severity events
+    forge SecurityAlerts {
+        
+        const ALERT_HIGH: u32 = 3;
+        const ALERT_CRITICAL: u32 = 4;
+        
+        /// Generate alert for critical security events
+        pub proc K::security_alert(event: SecurityEvent) {
+            // Emit high-priority
+            @std::println(\"!!! SECURITY ALERT !!!\")?;
+            @std::println(\"!!! SECURITY ALERT !!!\")?;
+            @std::println(\"!!! SECURITY ALERT !!!\")?;
+            @std::println(@"")?;
+            @std::println(event.to_string())?;
+            @std::println(@"")?;
+            @std::println(\"!!! SECURITY ALERT !!!\")?;
+            @std::println(\"!!! SECURITY ALERT !!!\")?;
+            @std::println(\"!!! SECURITY ALERT !!!\")?;
+        }
+    }
+    
+    /// Determine event severity
+    forge EventSeverity {
+        
+        pub proc K::event_severity(event_type: u32) -> u32 {
+            match event_type {
+                // Capabilities
+                EVENT_CAP_INVALID_DELEGATION
+                    | EVENT_CAP_UNAUTHORIZED_ACCESS => SEVERITY_MEDIUM,
+                EVENT_CAP_CORRUPTED_DESCRIPTOR => SEVERITY_CRITICAL,
+                EVENT_CAP_ELEVATION_ATTEMPT => SEVERITY_HIGH,
+                
+                // Memory safety
+                EVENT_MEMORY_CORRUPTION
+                    | EVENT_MEMORY_DOUBLE_FREE => SEVERITY_HIGH,
+                EVENT_MEMORY_GUARD_VIOLATION => SEVERITY_MEDIUM,
+                EVENT_MEMORY_ACCESS_OUTSIDE_USERSPACE => SEVERITY_HIGH,
+                
+                // Boot/runtime
+                EVENT_BOOT_CONTRACT_VIOLATION => SEVERITY_CRITICAL,
+                EVENT_RUNTIME_CORRUPTION => SEVERITY_HIGH,
+                
+                // Domain security
+                EVENT_DOMAIN_INVALID_TRANSITION => SEVERITY_HIGH,
+                EVENT_DOMAIN_ESCALATION_ATTEMPT => SEVERITY_CRITICAL,
+                
+                // Unknown event
+                _ => SEVERITY_LOW,
+            }
+        }
+    }
+    
+    /// Capability corruption detection
+    forge CapDescriptorValidator {
+        
+        /// Check capability descriptor integrity
+        pub proc K::validate_capability_descriptor(cap: u64) -> bool {
+            // Should verify descriptor magic, checksum, type
+            let ptr = cap;
+            let magic = K::memory_load_u32(ptr);
+            magic == 0x43415032  // "CAP2"
+        }
+    }
+    
+    /// Domain security monitors
+    forge DomainSecurityMonitor {
+        
+        /// Monitor domain transitions
+        pub proc K::monitor_domain_transition(from: u32, to: u32) -> bool {
+            // Check if transition is valid
+            if !K::is_valid_domain_transition(from, to) {
+                // Log security violation
+                let pid = K::get_current_pid();
+                let event = SecurityEvent::new(
+                    EVENT_DOMAIN_INVALID_TRANSITION,
+                    SEVERITY_HIGH,
+                    pid,
+                    pid as u64,  // source process
+                    to as u64,   // attempted destination
+                    @"Invalid domain transition attempted",
+                );
+                
+                K::audit_log(event);
+                K::security_alert(event);
+                
+                false
+            } else {
+                true
+            }
+        }
+    }
+    
+    /// Testing: Security event simulation
+    forge SecurityAuditTests {
+        
+        pub proc K::test_security_audit() -> u32 {
+            // Test 1: Log critical event
+            let critical = SecurityEvent::new(
+                EVENT_CAP_CORRUPTED_DESCRIPTOR,
+                SEVERITY_CRITICAL,
+                0,
+                0xFF00,
+                0,
+                @"Test: Corrupted capability",
+            );
+            K::audit_log(critical);
+            
+            // Verify logged
+            assert_eq!(AuditLog::events_logged, 1);
+            
+            0
+        }
+        
+        pub proc K::test_domain_monitor() -> u32 {
+            // Simulate invalid domain transition
+            let result = DomainSecurityMonitor::monitor_domain_transition(
+                xdv_sdk::handle::DomainId::K,  // From K
+                99  // To invalid domain
+            );
+            
+            assert_eq!(result, false);
+            assert_eq!(AuditLog::events_logged, 1);  // Should have logged
+            
+            0
+        }
+    }
+}
+
+/// Security audit initialization
+forge SecurityAuditIntegration {
+    
+    /// Enable security auditing during kernel boot
+    pub proc K::enable_security_audit() -> u32 {
+        trace!("AUDIT", @"=== Security Audit Enabled ===")?;
+        
+        // Initialize log ring buffer
+        AuditLog::log_buffer.fill(SecurityEvent::empty());
+        AuditLog::log_head = 0;
+        AuditLog::log_tail = 0;
+        AuditLog::events_logged = 0;
+        AuditLog::events_dropped = 0;
+        
+        // Run self-tests
+        SecurityAuditTests::test_security_audit()?;
+        SecurityAuditTests::test_domain_monitor()?;
+        
+        trace!("AUDIT", @"✓ Security audit self-tests passed")?;
+        
+        0
+    }
+}
+
+// Export
+pub use SecurityAudit, SecurityAuditTests, SecurityAuditIntegration;

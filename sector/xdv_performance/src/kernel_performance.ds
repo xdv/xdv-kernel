@@ -1,0 +1,312 @@
+//! XDV Kernel: Performance Benchmarking Infrastructure
+//!
+//! Senior Developer Implementation: Production performance profiling
+
+forge KernelPerformance {
+    
+    // Performance categories
+    const PERF_CAT_MEMORY: u32 = 1;
+    const PERF_CAT_CPU: u32 = 2;
+    const PERF_CAT_BOOT: u32 = 3;
+    const PERF_CAT_PROCESS: u32 = 4;
+    const PERF_CAT_SECTORS: u32 = 5;
+    
+    // Benchmark thresholds (in CPU cycles)
+    const BENCHMARK_SLOW: u64 = 1_000_000;      // 1ms
+    const BENCHMARK_ACCEPTABLE: u64 = 100_000;  // 100us
+    const BENCHMARK_FAST: u64 = 10_000;         // 10us
+    const BENCHMARK_EXCELLENT: u64 = 1_000;     // 1us
+    
+    /// Single benchmark measurement
+    struct BenchmarkMeasurement {
+        name: @str,
+        category: u32,
+        cycles: u64,
+        iterations: u32,
+        avg_per_iter: u64,
+        unit: @str,  // "cycles", "us", "ns"
+    }
+    
+    impl BenchmarkMeasurement {
+        fn new(name: @str, category: u32, cycles: u64, 
+               iterations: u32) -> Self {
+            let avg = cycles / (iterations as u64);
+            let unit = if avg > 1000 { @"us" } else { @"cycles" };
+            
+            Self {
+                name,
+                category,
+                cycles,
+                iterations,
+                avg_per_iter: avg,
+                unit,
+            }
+        }
+        
+        fn grade(&self) -> @str {
+            match self.avg_per_iter {
+                x if x <= BENCHMARK_EXCELLENT => @"EXCELLENT",
+                x if x <= BENCHMARK_FAST => @"FAST",
+                x if x <= BENCHMARK_ACCEPTABLE => @"ACCEPTABLE",
+                x if x <= BENCHMARK_SLOW => @"SLOW",
+                _ => @"VERY_SLOW",
+            }
+        }
+    }
+    
+    /// Benchmark suite for collecting measurements
+    forge BenchmarkSuite {
+        
+        const MAX_MEASUREMENTS: u32 = 256;
+        static measurements: [BenchmarkMeasurement; MAX_MEASUREMENTS] = [BenchmarkMeasurement::empty(); MAX_MEASUREMENTS];
+        static measurement_count: u32 = 0;
+        
+        impl BenchmarkMeasurement {
+            fn empty() -> Self {
+                Self {
+                    name: @"",
+                    category: 0,
+                    cycles: 0,
+                    iterations: 0,
+                    avg_per_iter: 0,
+                    unit: @"",
+                }
+            }
+        }
+        
+        /// Add a measurement
+        pub proc K::benchmark_add(name: @str, category: u32, 
+                                  cycles: u64, iterations: u32) {
+            if measurement_count < MAX_MEASUREMENTS {
+                measurements[measurement_count] = BenchmarkMeasurement::new(
+                    name, category, cycles, iterations
+                );
+                measurement_count += 1;
+            }
+        }
+        
+        /// Run benchmark function multiple times
+        pub proc K::benchmark_run(name: @str, category: u32, 
+                                    iterations: u32, bench_fn: fn()) -> u64 {
+            let total_cycles: u64 = 0;
+            
+            for i in 0..iterations {
+                let start = K::get_cycle_count();
+                bench_fn();
+                let end = K::get_cycle_count();
+                total_cycles += end.saturating_sub(start);
+            }
+            
+            K::benchmark_add(name, category, total_cycles, iterations);
+            
+            total_cycles
+        }
+    }
+    
+    /// Performance counters
+    forge PerformanceCounters {
+        
+        static counters: [u64; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
+        
+        const COUNTER_MEMORY_ALLOC: usize = 0;
+        const COUNTER_MEMORY_FREE: usize = 1;
+        const COUNTER_PROCESS_SPAWN: usize = 2;
+        const COUNTER_PROCESS_YIELD: usize = 3;
+        const COUNTER_SECTOR_CALL: usize = 4;
+        const COUNTER_SECTOR_PANIC: usize = 5;
+        
+        /// Increment counter
+        pub proc K::perf_counter_inc(counter: usize) {
+            counters[counter] = counters[counter].saturating_add(1);
+        }
+        
+        /// Get counter value
+        pub proc K::perf_counter_get(counter: usize) -> u64 {
+            counters[counter]
+        }
+        
+        /// Reset counter
+        pub proc K::perf_counter_reset(counter: usize) {
+            counters[counter] = 0;
+        }
+        
+        /// Reset all counters
+        pub proc K::perf_counters_reset_all() {
+            for i in 0..8 {
+                counters[i] = 0;
+            }
+        }
+    }
+    
+    /// Boot performance profiling
+    forge BootPerformance {
+        
+        static boot_timings: [u64; 10] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        static phase_names: [@str; 10] = [
+            @"boot_contract",
+            @"split_interface",
+            @"runtime_contract", 
+            @"init_memory",
+            @"init_cpu",
+            @"load_runtime",
+            @"start_runtime",
+            @"main_boot",
+            @"",
+            @"",
+        ];
+        static phase_count: u32 = 8;
+        
+        /// Record phase timing
+        pub proc K::record_boot_timing(phase: u32, cycles: u64) {
+            if phase < phase_count {
+                boot_timings[phase as usize] = cycles;
+            }
+        }
+        
+        /// Analyze boot performance
+        pub proc K::analyze_boot_performance() {
+            debug!("PERF", @"=== Boot Performance Analysis ===")?;
+            
+            let mut total = 0u64;
+            for i in 0..phase_count {
+                let cycles = boot_timings[i as usize];
+                total += cycles;
+                
+                let grade = K::performance_grade(cycles);
+                
+                debug!("PERF", @std::string::concat(
+                    @"[Phase ", @std::str::from_u32(i),
+                    @": ", phase_names[i as usize],
+                    @"] ", @std::str::from_u64(cycles),
+                    @" cycles (", grade, @")"
+                ))?;
+            }
+            
+            debug!("PERF", @std::string::concat(
+                @"Total boot time: ", @std::str::from_u64(total),
+                @" cycles"
+            ))?;
+            
+            if total > 10_000_000 {
+                warn!("PERF", @"Boot time exceeds 10ms target")?;
+            }
+        }
+        
+        /// Performance grading
+        proc K::performance_grade(cycles: u64) -> @str {
+            match cycles {
+                x if x <= 1000 => @"EXCELLENT",
+                x if x <= 10000 => @"FAST",
+                x if x <= 100000 => @"ACCEPTABLE",
+                _ => @"SLOW",
+            }
+        }
+    }
+    
+    /// Memory allocation benchmarks
+    forge MemoryPerformance {
+        
+        /// Benchmark various allocation sizes
+        pub proc K::benchmark_memory_allocations() {
+            let sizes = [128u32, 256, 512, 1024, 4096, 16384, 65536];
+            
+            for size in sizes.iter() {
+                let token = K::trace_begin(@"alloc_benchmark");
+                
+                let mut total_cycles: u64 = 0;
+                let iterations = 100;
+                
+                for i in 0..iterations {
+                    let start = K::get_cycle_count();
+                    let ptr = K::memory_alloc(*size);
+                    let end = K::get_cycle_count();
+                    
+                    total_cycles += end.saturating_sub(start);
+                    
+                    if ptr != 0 {
+                        K::memory_free(ptr);
+                    }
+                }
+                
+                let avg_cycles = total_cycles / iterations;
+                
+                K::trace_end(token, @"alloc_benchmark");
+                
+                // Convert to nanoseconds (assuming 1GHz CPU)
+                let avg_ns = avg_cycles; // 1 cycle = 1ns at 1GHz
+                
+                info!("PERF", @std::string::concat(
+                    @"Alloc ", @std::str::from_u32(*size),
+                    @" bytes: avg ", @std::str::from_u64(avg_cycles),
+                    @" cycles (", @std::str::from_u64(avg_ns), @"ns)"
+                ))?;
+                
+                // Track per-size
+                K::benchmark_add(
+                    @std::string::concat(@"alloc_", @std::str::from_u32(*size)),
+                    PERF_CAT_MEMORY,
+                    total_cycles,
+                    iterations
+                );
+            }
+        }
+    }
+    
+    /// Print performance summary
+    pub proc K::print_benchmark_summary() {
+        debug!("BENCH", @"╔═══════════════════════════════════════════════════════════════╗")?;
+        debug!("BENCH", @"║   XDV Kernel Performance Benchmark Summary                    ║")?;
+        debug!("BENCH", @"╚═══════════════════════════════════════════════════════════════╝")?;
+        
+        let total_tests = BenchmarkSuite::measurement_count;
+        
+        for i in 0..total_tests {
+            let m = BenchmarkSuite::measurements[i as usize];
+            let grade = m.grade();
+            
+            debug!("BENCH", m.format())?;
+            debug!("BENCH", @std::string::concat(@"  Grade: ", grade))?;
+            
+            if grade != @"EXCELLENT" && grade != @"FAST" {
+                warn!("BENCH", @"  Consider optimization")?;
+            }
+        }
+        
+        // Print counters
+        debug!("BENCH", @"");
+        debug!("BENCH", @"Performance Counters:");
+        debug!("BENCH", @std::string::concat(
+            @"  Memory allocations: ", 
+            @std::str::from_u64(PerformanceCounters::perf_counter_get(0))
+        ))?;
+        debug!("BENCH", @std::string::concat(
+            @"  Process spawns: ", 
+            @std::str::from_u64(PerformanceCounters::perf_counter_get(2))
+        ))?;
+    }
+}
+
+/// Self-test for performance suite
+forge PerformanceTests {
+    
+    pub proc K::test_performance_suite() -> u32 {
+        // Reset counters  
+        PerformanceCounters::perf_counters_reset_all();
+        
+        // Increment some counters
+        for i in 0..100 {
+            PerformanceCounters::perf_counter_inc(0);  // Memory alloc
+            if i % 2 == 0 {
+                PerformanceCounters::perf_counter_inc(2);  // Process spawn
+            }
+        }
+        
+        // Verify they counted
+        assert_eq!(PerformanceCounters::perf_counter_get(0), 100);
+        assert_eq!(PerformanceCounters::perf_counter_get(2), 50);
+        
+        0
+    }
+}
+
+pub use KernelPerformance, BenchmarkSuite, PerformanceCounters, BootPerformance, PerformanceTests;
