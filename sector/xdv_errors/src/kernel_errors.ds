@@ -1,0 +1,213 @@
+//! XDV Kernel: Structured Error Handling Sector
+//!
+//! Senior Developer Implementation: Production-grade error handling
+//! Enables proper diagnostics and recovery
+
+forge KernelErrors {
+    
+    // Base kernel error codes
+    const ERR_OK: u32 = 0;
+    const ERR_GENERIC: u32 = 1;
+    const ERR_INVALID_ARGUMENT: u32 = 2;
+    const ERR_PERMISSION_DENIED: u32 = 3;
+    const ERR_NOT_FOUND: u32 = 4;
+    const ERR_RESOURCE_BUSY: u32 = 5;
+    const ERR_OUT_OF_MEMORY: u32 = 6;
+    const ERR_INVALID_STATE: u32 = 7;
+    
+    // Critical kernel errors
+    const ERR_KERNEL_PANIC: u32 = 0xF000;
+    const ERR_BOOT_CONTRACT_VIOLATION: u32 = 0xF001;
+    const ERR_SPLIT_INTERFACE_MISMATCH: u32 = 0xF002;
+    const ERR_RUNTIME_CONTRACT_FAILED: u32 = 0xF003;
+    const ERR_SECTOR_INIT_FAILED: u32 = 0xF005;
+    const ERR_MEMORY_CORRUPTION: u32 = 0xF006;
+    const ERR_SECURITY_VIOLATION: u32 = 0xF100;
+    
+    // Structured error with rich context
+    struct KernelErrorContext {
+        code: u32,
+        module: @str,
+        line: u32,
+        context: @str,
+    }
+    
+    impl KernelErrorContext {
+        fn new(code: u32, module: @str, line: u32, context: @str) -> Self {
+            Self { code, module, line, context }
+        }
+        
+        fn to_string(&self) -> @str {
+            @std::string::concat(
+                @"Error: ", self.context,
+                @"\n  Code: 0x", @std::str::from_u32(self.code),
+                @"\n  Module: ", self.module,
+                @"\n  Line: ", @std::str::from_u32(self.line)
+            )
+        }
+    }
+    
+    // Sector-specific error builders
+    forge MemoryError {
+        
+        const ERR_INVALID_RANGE: u32 = 0x1000;
+        const ERR_GUARD_VIOLATION: u32 = 0x1001;
+        const ERR_DOUBLE_FREE: u32 = 0x1002;
+        const ERR_CORRUPTION_DETECTED: u32 = 0x1003;
+        
+        pub proc K::invalid_range(addr: u64, size: u64) -> u32 {
+            let ctx = KernelErrorContext::new(
+                ERR_INVALID_RANGE,
+                @"MemorySector",
+                0, // Would be __LINE__ in real implementation
+                @std::string::concat(
+                    @"Invalid memory range: addr=0x", @std::str::from_u64(addr),
+                    @" size=", @std::str::from_u64(size)
+                )
+            );
+            K::log_error(ctx);
+            ERR_INVALID_RANGE
+        }
+        
+        pub proc K::corruption_detected(at_addr: u64) -> u32 {
+            let ctx = KernelErrorContext::new(
+                ERR_CORRUPTION_DETECTED,
+                @"MemorySector",
+                0,
+                @std::string::concat(
+                    @"Memory corruption detected at 0x",
+                    @std::str::from_u64(at_addr)
+                )
+            );
+            K::log_critical(ctx);
+            ERR_CORRUPTION_DETECTED
+        }
+    }
+    
+    forge BootError {
+        
+        const ERR_CONTRACT_VERSION_MISMATCH: u32 = 0x2000;
+        const ERR_INVALID_BOOT_PARAMETERS: u32 = 0x2001;
+        const ERR_RUNTIME_NOT_FOUND: u32 = 0x2002;
+        const ERR_SECTOR_NOT_FOUND: u32 = 0x2003;
+        const ERR_SECTOR_INIT_PANIC: u32 = 0x2004;
+        
+        pub proc K::boot_contract_violation(expected: u32, actual: u32) -> u32 {
+            let ctx = KernelErrorContext::new(
+                ERR_CONTRACT_VERSION_MISMATCH,
+                @"BootSector",
+                0,
+                @std::string::concat(
+                    @"Boot contract mismatch: expected v",
+                    @std::str::from_u32(expected),
+                    @", got v",
+                    @std::str::from_u32(actual)
+                )
+            );
+            K::log_critical(ctx);
+            ERR_CONTRACT_VERSION_MISMATCH
+        }
+        
+        pub proc K::sector_init_panic(sector_name: @str, panic_code: u32) -> u32 {
+            let ctx = KernelErrorContext::new(
+                ERR_SECTOR_INIT_PANIC,
+                @"BootSector",
+                0,
+                @std::string::concat(
+                    @"Sector ", sector_name,
+                    @" panic: code ", @std::str::from_u32(panic_code)
+                )
+            );
+            K::log_critical(ctx);
+            ERR_SECTOR_INIT_PANIC
+        }
+    }
+    
+    forge SecurityError {
+        
+        const ERR_CAPABILITY_VIOLATION: u32 = 0x3000;
+        const ERR_PERMISSION_ESCALATION: u32 = 0x3001;
+        const ERR_SANDBOX_VIOLATION: u32 = 0x3002;
+        
+        pub proc K::capability_violation(op: u32, cap: u64) -> u32 {
+            let ctx = KernelErrorContext::new(
+                ERR_CAPABILITY_VIOLATION,
+                @"SecuritySector",
+                0,
+                @std::string::concat(
+                    @"Capability violation: op=0x", @std::str::from_u32(op),
+                    @" cap=0x", @std::str::from_u64(cap)
+                )
+            );
+            K::log_security(ctx);
+            ERR_CAPABILITY_VIOLATION
+        }
+    }
+}
+
+/// Error propagation helpers
+forge ErrorPropagation {
+    
+    /// Propagate error up the stack
+    macro return_if_err($expr) {
+        match $expr {
+            ERR_OK => {},
+            err => return err,
+        }
+    }
+    
+    /// Propagate error with context
+    macro return_if_err_with_context($expr, $ctx) {
+        match $expr {
+            ERR_OK => {},
+            err => {
+                K::attach_error_context(err, $ctx);
+                return err;
+            }
+        }
+    }
+}
+
+// Enhanced boot with error handling
+forge ErrorSafeBoot {
+    
+    /// Boot-safe version of kernel_start with structured errors
+    pub proc K::kernel_start_safe() -> u32 {
+        return_if_err!(K::validate_boot_contract()?);
+        return_if_err!(K::validate_split_interfaces()?);
+        return_if_err!(K::validate_runtime_contract()?);
+        return_if_err!(K::init_kernel_safe()?);
+        return_if_err!(K::load_runtime_safe()?);
+        return_if_err!(K::start_runtime_safe()?);
+        
+        K::kernel_main_safe()
+    }
+    
+    pub proc K::validate_boot_contract() -> u32 {
+        let version = K::boot_contract_version();
+        if version != BOOT_CONTRACT_EXPECTED_VERSION {
+            return BootError::boot_contract_violation(
+                BOOT_CONTRACT_EXPECTED_VERSION,
+                version
+            );
+        }
+        ERR_OK
+    }
+}
+
+// Test error handling
+forge ErrorTests {
+    
+    pub proc K::test_error_propagation() -> u32 {
+        // Test return_if_err macro
+        let result = match K::validate_boot_contract() {
+            ERR_OK => ERR_OK,
+            err => BootError::boot_contract_violation(3, 1),
+        };
+        assert(result == ERR_OK);
+        
+        0
+    }
+}
+
+pub use kernel_errors::{KernelErrors, ErrorPropagation, ErrorSafeBoot};

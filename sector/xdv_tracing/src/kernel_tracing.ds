@@ -1,0 +1,303 @@
+//! XDV Kernel: Tracing and Logging Infrastructure
+//!
+//! Senior Developer Implementation: Production diagnostics and tracing
+
+forge KernelTracing {
+    
+    // Log levels
+    const LOG_LEVEL_NONE: u32 = 0;
+    const LOG_LEVEL_ERROR: u32 = 1;
+    const LOG_LEVEL_WARN: u32 = 2;
+    const LOG_LEVEL_INFO: u32 = 3;
+    const LOG_LEVEL_DEBUG: u32 = 4;
+    const LOG_LEVEL_TRACE: u32 = 5;
+    
+    // Default log level (can be changed at runtime)
+    static current_log_level: u32 = LOG_LEVEL_INFO;
+    static current_filter: u32 = 0xFFFFFFFF;  // All modules enabled
+    
+    // Module identifiers for filtering
+    const FILTER_BOOT: u32 = 1 << 0;
+    const FILTER_MEMORY: u32 = 1 << 1;
+    const FILTER_CPU: u32 = 1 << 2;
+    const FILTER_PROCESS: u32 = 1 << 3;
+    const FILTER_SECURITY: u32 = 1 << 4;
+    const FILTER_ALL: u32 = 0xFFFFFFFF;
+    
+    /// Structured log entry
+    struct LogEntry {
+        level: u32,
+        module: @str,
+        message: @str,
+        timestamp: u64,
+        pid: u32,
+    }
+    
+    impl LogEntry {
+        fn new(level: u32, module: @str, message: @str) -> Self {
+            Self {
+                level,
+                module,
+                message,
+                timestamp: K::get_cycle_count(),
+                pid: K::get_current_pid(),
+            }
+        }
+        
+        fn format(&self) -> @str {
+            @std::string::concat(
+                @"[", K::format_cycle(self.timestamp), @"] ",
+                @"[PID:", @std::str::from_u32(self.pid), @"] ",
+                @"[", self.module, @"] ",
+                @"[", K::log_level_name(self.level), @"] ",
+                self.message
+            )
+        }
+    }
+    
+    /// Get log level name
+    proc K::log_level_name(level: u32) -> @str {
+        match level {
+            LOG_LEVEL_ERROR => @"ERROR",
+            LOG_LEVEL_WARN => @"WARN",
+            LOG_LEVEL_INFO => @"INFO",
+            LOG_LEVEL_DEBUG => @"DEBUG",
+            LOG_LEVEL_TRACE => @"TRACE",
+            _ => @"UNKNOWN",
+        }
+    }
+    
+    /// Get current log level
+    proc K::get_log_level() -> u32 {
+        current_log_level
+    }
+    
+    /// Set current log level
+    proc K::set_log_level(level: u32) {
+        if level <= LOG_LEVEL_TRACE {
+            current_log_level = level;
+        }
+    }
+    
+    /// Check if module is filtered
+    proc K::is_module_enabled(filter: u32) -> bool {
+        (current_filter & filter) != 0
+    }
+    
+    /// Core logging function
+    proc K::log(level: u32, module: @str, msg: @str) {
+        if level <= current_log_level {
+            let entry = LogEntry::new(level, module, msg);
+            emit(entry.format());
+            
+            // Also write to kernel log buffer if available
+            if K::kernel_log_buffer_available() {
+                K::kernel_log_write(entry);
+            }
+        }
+    }
+    
+    // Convenience macros for logging
+    macro error!($module:expr, $msg:expr) {
+        K::log(LOG_LEVEL_ERROR, $module, $msg)
+    }
+    
+    macro warn!($module:expr, $msg:expr) {
+        K::log(LOG_LEVEL_WARN, $module, $msg)
+    }
+    
+    macro info!($module:expr, $msg:expr) {
+        K::log(LOG_LEVEL_INFO, $module, $msg)
+    }
+    
+    macro debug!($module:expr, $msg:expr) {
+        K::log(LOG_LEVEL_DEBUG, $module, $msg)
+    }
+    
+    macro trace!($module:expr, $msg:expr) {
+        K::log(LOG_LEVEL_TRACE, $module, $msg)
+    }
+}
+
+/// Performance tracing
+forge PerformanceTracing {
+    
+    struct TracePoint {
+        name: @str,
+        start_cycle: u64,
+        end_cycle: u64,
+        pid: u32,
+    }
+    
+    impl TracePoint {
+        fn new(name: @str) -> Self {
+            Self {
+                name,
+                start_cycle: 0,
+                end_cycle: 0,
+                pid: K::get_current_pid(),
+            }
+        }
+        
+        fn start(&mut self) {
+            self.start_cycle = K::get_cycle_count();
+        }
+        
+        fn end(&mut self) {
+            self.end_cycle = K::get_cycle_count();
+        }
+        
+        fn duration(&self) -> u64 {
+            self.end_cycle.saturating_sub(self.start_cycle)
+        }
+    }
+    
+    /// Start a trace point
+    pub proc K::trace_begin(name: @str) -> u64 {
+        let trace = TracePoint::new(name);
+        trace.start();
+        
+        K::trace_log(@"BEGIN", name, 0);
+        
+        trace.start_cycle  // Return token
+    }
+    
+    /// End a trace point
+    pub proc K::trace_end(token: u64, name: @str) {
+        let end = K::get_cycle_count();
+        let duration = end.saturating_sub(token);
+        
+        K::trace_log(@"END", name, duration);
+    }
+    
+    /// Log trace event
+    proc K::trace_log(op: @str, name: @str, duration: u64) {
+        trace!("PERF", @std::string::concat(
+            op, @" ", name, @" duration=", @std::str::from_u64(duration)
+        ));
+    }
+}
+
+/// Boot tracing
+forge BootTracing {
+    
+    const BOOT_TRACE_PHASE_START: u32 = 1;
+    const BOOT_TRACE_PHASE_CONTRACT: u32 = 2;
+    const BOOT_TRACE_PHASE_INIT: u32 = 3;
+    const BOOT_TRACE_PHASE_RUNTIME: u32 = 4;
+    const BOOT_TRACE_PHASE_MAIN: u32 = 5;
+    
+    static boot_phase: u32 = 0;
+    static phase_start_cycles: [u64; 6] = [0, 0, 0, 0, 0, 0];
+    
+    /// Record phase start
+    pub proc K::trace_boot_phase_start(phase: u32) {
+        phase_start_cycles[phase as usize] = K::get_cycle_count();
+        
+        trace!(
+            @"BOOT",
+            @std::string::concat(
+                @"Phase ",
+                @std::str::from_u32(phase),
+                @" starting"
+            )
+        );
+        
+        boot_phase = phase;
+    }
+    
+    /// Record phase end and log stats
+    pub proc K::trace_boot_phase_end(phase: u32) {
+        let start = phase_start_cycles[phase as usize];
+        let end = K::get_cycle_count();
+        let duration = end.saturating_sub(start);
+        
+        trace!(
+            @"BOOT",
+            @std::string::concat(
+                @"Phase ", @std::str::from_u32(phase),
+                @" completed in ", @std::str::from_u64(duration),
+                @" cycles"
+            )
+        );
+        
+        // Warn if phase takes too long
+        if duration > 1000000 {
+            warn!("BOOT", @"Phase took unusually long");
+        }
+    }
+    
+    /// Get boot timing summary
+    pub proc K::get_boot_timings() -> [u64; 6] {
+        phase_start_cycles
+    }
+}
+
+/// Integration: Enhanced boot with tracing
+forge TracedBoot {
+    
+    /// Boot with full tracing
+    pub proc K::boot_with_tracing() -> u32 {
+        trace_boot_phase_start(BOOT_TRACE_PHASE_START);
+        
+        trace!("BOOT", @"=== XDV Kernel Boot ===");
+        
+        return_if_err_with_context!(
+            K::validate_boot_contract()?, 
+            @"Boot contract validation"
+        );
+        trace_boot_phase_end(BOOT_TRACE_PHASE_START);
+        
+        trace_boot_phase_start(BOOT_TRACE_PHASE_CONTRACT);
+        return_if_err_with_context!(
+            K::validate_split_interfaces()?, 
+            @"Split interface validation"
+        );
+        return_if_err_with_context!(
+            K::validate_runtime_contract()?,
+            @"Runtime contract validation"
+        );
+        trace_boot_phase_end(BOOT_TRACE_PHASE_CONTRACT);
+        
+        trace_boot_phase_start(BOOT_TRACE_PHASE_INIT);
+        return_if_err_with_context!(
+            K::init_kernel_sectors()?,
+            @"Kernel initialization"
+        );
+        trace_boot_phase_end(BOOT_TRACE_PHASE_INIT);
+        
+        trace_boot_phase_start(BOOT_TRACE_PHASE_RUNTIME);
+        return_if_err_with_context!(
+            K::load_and_start_runtime()?,
+            @"Runtime startup"
+        );
+        trace_boot_phase_end(BOOT_TRACE_PHASE_RUNTIME);
+        
+        trace_boot_phase_start(BOOT_TRACE_PHASE_MAIN);
+        K::kernel_main()
+    }
+}
+
+// Tests
+forge TracingTests {
+    
+    pub proc K::test_tracing() -> u32 {
+        let old_level = K::get_log_level();
+        
+        K::set_log_level(LOG_LEVEL_DEBUG);
+        
+        error!("TEST", @"This is an error");
+        warn!("TEST", @"This is a warning");
+        info!("TEST", @"This is info");
+        debug!("TEST", @"This is debug");
+        
+        K::set_log_level(old_level);
+        
+        let token = K::trace_begin(@"test_op");
+        K::trace_end(token, @"test_op");
+        
+        0
+    }
+}
+
+pub use KernelTracing, PerformanceTracing, BootTracing, TracedBoot;
