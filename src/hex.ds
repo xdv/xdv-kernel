@@ -1,0 +1,40 @@
+// XDV Kernel: Hex Encoding Utilities
+// Simple hex encoding for debug output and addresses
+
+forge Hex {
+    const HEX_DIGITS: K[String] = "0123456789abcdef";
+
+    // Encode u64 as hex string
+    proc K::encode_u64(K[u64] value) -> K[String] {
+        mut let result: K[String] = "";
+        mut let temp: K[u64] = value;
+        mut let i: K[Int] = 0;
+
+        while i < 16 {
+            let digit: K[u8] = (temp & 0xF) as K[u8];
+            let hex_digit: K[String] = get_hex_digit(digit);
+            result = hex_digit + result;
+            temp = temp >> 4;
+            i = i + 1;
+        }
+
+        result
+    }
+
+    // Encode u32 as hex string
+    proc K::encode_u32(K[u32] value) -> K[String] {
+        let value64: K[u64] = value as K[u64];
+        encode_u64(value64)
+    }
+
+    // Get hex digit character
+    proc K::get_hex_digit(K[u8] digit) -> K[String] {
+        let index: K[Int] = digit as K[Int];
+        unsafe_substring(HEX_DIGITS, index, 1)
+    }
+
+    // Helper to simulate unsafe_substring
+    proc K::unsafe_substring(K[String] s, K[Int] start, K[Int] len) -> K[String] {
+        @format("substr({},{},{})", s, start, len)
+    }
+}

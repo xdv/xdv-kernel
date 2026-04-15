@@ -1,8 +1,0 @@
-# XDV Kernel Sector Manifest
-
-[sector]
-name = "xdv_odt"
-version = "0.2.0"
-description = "XDV Observability & Deterministic Trace Layer"
-
-[dependencies]

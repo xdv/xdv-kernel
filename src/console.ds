@@ -1,0 +1,96 @@
+// XDV Kernel: Console I/O
+// UART-based console output for debugging
+
+forge Console {
+    const UART_BASE: K[u16] = 0x3F8;
+
+    // Early console initialization
+    proc K::early_init() -> K[Unit] {
+        unsafe_store_u8(
+            K[Ptr[u8]]::from_address(UART_BASE + 1),
+            0
+        );
+
+        unsafe_store_u8(
+            K[Ptr[u8]]::from_address(UART_BASE + 3),
+            0x80
+        );
+
+        unsafe_store_u8(
+            K[Ptr[u8]]::from_address(UART_BASE),
+            3
+        );
+
+        unsafe_store_u8(
+            K[Ptr[u8]]::from_address(UART_BASE + 3),
+            3
+        );
+    }
+
+    // Print string without newline
+    proc K::print(K[String] s) -> K[Unit] {
+        mut let i: K[Int] = 0;
+        let len: K[Int] = string_length(s);
+
+        while i < len {
+            let byte: K[u8] = unsafe_get_byte(s, i);
+
+            wait_for_transmit();
+            unsafe_store_u8(
+                K[Ptr[u8]]::from_address(UART_BASE),
+                byte
+            );
+
+            i = i + 1;
+        }
+    }
+
+    // Print string with newline
+    proc K::println(K[String] s) -> K[Unit] {
+        print(s);
+        print("\n");
+    }
+
+    // Flush any buffered output
+    proc K::flush() -> K[Unit] {
+        // No buffering
+    }
+
+    // Emergency print without error handling
+    proc K::emergency_print(K[String] s) -> K[Unit] {
+        print(s);
+    }
+
+    // Emergency print with newline
+    proc K::emergency_println(K[String] s) -> K[Unit] {
+        println(s);
+    }
+
+    // Wait for UART ready to transmit
+    proc K::wait_for_transmit() -> K[Unit] {
+        mut let ready: K[bool] = false;
+        while !ready {
+            let status: K[u8] = unsafe_load_u8(
+                K[Ptr[u8]]::from_address(UART_BASE + 5)
+            );
+            ready = (status & 0x20) != 0;
+        }
+    }
+
+    // Helper functions (placeholders)
+    proc K::unsafe_load_u8(K[Ptr[u8]] ptr) -> K[u8] {
+        @read_u8(ptr)
+    }
+
+    proc K::unsafe_store_u8(K[Ptr[u8]] ptr, K[u8] value) -> K[Unit] {
+        @write_u8(ptr, value)
+    }
+
+    proc K::string_length(K[String] s) -> K[Int] {
+        @strlen(s)
+    }
+
+    proc K::unsafe_get_byte(K[String] s, K[Int] index) -> K[u8] {
+        @get_byte(s, index)
+    }
+}

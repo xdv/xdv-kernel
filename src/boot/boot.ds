@@ -1,0 +1,235 @@
+// XDV Kernel: Boot Integration
+// Bootloader handoff, kernel initialization, and xdv-shell loading
+
+forge Boot {
+    // Boot information header from bootloader
+    shape BootInfo {
+        magic: K[u32];
+        version: K[u32];
+        memory_map_addr: K[u64];
+        memory_map_entries: K[u32];
+        kernel_end: K[u64];
+        cmdline: K[u64];
+    }
+
+    // Boot phase enum
+    shape BootPhase {
+        value: K[u8];
+    }
+
+    // Memory map entry from bootloader
+    shape MemoryMapEntry {
+        base_addr: K[u64];
+        length: K[u64];
+        entry_type: K[u32];
+        attributes: K[u32];
+    }
+
+    // Phase constants
+    const PHASE_UNINITIALIZED: K[u8] = 0;
+    const PHASE_MEMORY_INIT: K[u8] = 1;
+    const PHASE_CAPABILITIES_INIT: K[u8] = 2;
+    const PHASE_DEVICES_INIT: K[u8] = 3;
+    const PHASE_SHELL_LOADING: K[u8] = 4;
+    const PHASE_READY: K[u8] = 5;
+
+    // Boot magic
+    const BOOT_MAGIC: K[u32] = 0x2BADB002;
+
+    // Validate boot info
+    proc K::validate_boot(K[BootInfo] info) -> K[bool] {
+        if info.magic != BOOT_MAGIC {
+            Console::emergency_print("Invalid boot magic");
+            return false;
+        }
+
+        if info.version != 1 {
+            Console::emergency_print("Unsupported boot version");
+            return false;
+        }
+
+        if info.memory_map_addr == 0 || info.memory_map_entries == 0 {
+            Console::emergency_print("Invalid memory map");
+            return false;
+        }
+
+        true
+    }
+
+    // Get memory map slice
+    proc K::memory_map(K[BootInfo] info) -> K[Ptr[MemoryMapEntry]] {
+        info.memory_map_addr as K[Ptr[MemoryMapEntry]]
+    }
+
+    // Get number of memory map entries
+    proc K::memory_map_count(K[BootInfo] info) -> K[u32] {
+        info.memory_map_entries
+    }
+
+    // Get command line string
+    proc K::cmdline(K[BootInfo] info) -> K[String] {
+        if info.cmdline == 0 {
+            return "";
+        }
+        @load_cmdline(info.cmdline)
+    }
+
+    // Create boot phase
+    proc K::phase(K[u8] value) -> K[BootPhase] {
+        BootPhase{value: value}
+    }
+
+    // Check if memory entry is usable
+    proc K::usable(K[MemoryMapEntry] entry) -> K[bool] {
+        entry.entry_type == 1
+    }
+
+    // Validate capability during boot
+    proc K::validate_capability(K[Capability] cap, K[DomainId] domain) -> K[bool] {
+        let cap_dom: K[DomainId] = cap.domain;
+        if cap_dom.value == domain.value {
+            return true;
+        }
+        false
+    }
+
+    // Initialize console for boot
+    proc K::init_console() -> K[Unit] {
+        Console::early_init();
+        Console::println("XDV Boot Integration");
+        Console::println("====================");
+    }
+
+    // Load memory map
+    proc K::load_memory_map(K[BootInfo] info) -> K[u64] {
+        let map: K[Ptr[MemoryMapEntry]] = memory_map(info);
+        let count: K[u32] = memory_map_count(info);
+        let mut total: K[u64] = 0;
+
+        Console::println("Memory Map:");
+
+        mut let i: K[u32] = 0;
+        while i < count {
+            let entry: K[MemoryMapEntry] = unsafe_load_entry(map, i);
+
+            if usable(entry) {
+                total = total + entry.length;
+                Console::print("  Usable: 0x");
+                emit Hex::encode_u64(entry.base_addr);
+                Console::print("-0x");
+                emit Hex::encode_u64(entry.base_addr + entry.length);
+                Console::println("");
+            }
+
+            i = i + 1;
+        }
+
+        total
+    }
+
+    // Early boot initialization
+    proc K::boot_init(K[BootInfo] info) -> K[bool] {
+        if !validate_boot(info) {
+            return false;
+        }
+
+        init_console();
+
+        let total_memory: K[u64] = load_memory_map(info);
+        Console::print("Total memory: 0x");
+        emit Hex::encode_u64(total_memory);
+        Console::println(" bytes");
+
+        true
+    }
+
+    // Load xdv-shell
+    proc K::load_shell() -> K[bool] {
+        Console::println("Loading xdv-shell...");
+
+        // Try /bin/xdv-shell
+        if try_load("/bin/xdv-shell") {
+            return true;
+        }
+
+        // Try /boot/xdv-shell
+        if try_load("/boot/xdv-shell") {
+            return true;
+        }
+
+        // Try ./xdv-shell
+        if try_load("./xdv-shell") {
+            return true;
+        }
+
+        false
+    }
+
+    // Try to load ELF file
+    proc K::try_load(K[String] path) -> K[bool] {
+        Console::print("Trying ");
+        Console::println(path);
+
+        // Real impl: check ELF header at expected location
+        let found: K[bool] = @check_elf_exists(path);
+        found
+    }
+
+    // Jump to loaded shell
+    proc K::jump_to_shell(K[u64] entry_addr) -> K[Unit] {
+        Console::print("Jumping to shell at 0x");
+        emit Hex::encode_u64(entry_addr);
+        Console::println("");
+
+        @jump_to_address(entry_addr);
+    }
+
+    // Main boot entry
+    proc K::boot_main(K[BootInfo] info) -> K[Unit] {
+        Console::println("=== XDV Extended Boot ===");
+
+        let ok: K[bool] = boot_init(info);
+        if !ok {
+            Console::emergency_print("Boot initialization failed");
+            @halt();
+        }
+
+        let shell_loaded: K[bool] = load_shell();
+        if !shell_loaded {
+            Console::emergency_print("Failed to load xdv-shell");
+            @halt();
+        }
+
+        Console::println("Boot complete, transferring control...");
+
+        // Calculate typical entry offset
+        let entry: K[u64] = SHELL_LOAD_ADDR + 0x1000;
+        jump_to_shell(entry);
+    }
+
+    // Boot error handler
+    proc K::boot_error(K[String] msg) -> K[Unit] {
+        Console::emergency_print("BOOT ERROR: ");
+        Console::emergency_println(msg);
+        @halt();
+    }
+
+    // Helper constants
+    const SHELL_LOAD_ADDR: K[u64] = 0x200000;
+
+    // Helper: load memory entry
+    unsafe proc K::unsafe_load_entry(K[Ptr[MemoryMapEntry]] map, K[u32] index) -> K[MemoryMapEntry] {
+        @load_memory_map_entry(map, index)
+    }
+
+    // Helper: halt
+    proc K::halt() -> K[Unit] {
+        @halt_cpu();
+    }
+}
+
+// Boot startup entry point
+craft K::boot_startup(K[BootInfo] info) {
+    Boot::boot_main(info);
+}
+

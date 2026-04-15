@@ -1,0 +1,100 @@
+// XDV Kernel: Memory Management
+// Memory manager with boot info parsing
+
+forge Memory {
+    // Memory map entry from bootloader
+    shape MemoryMapEntry {
+        base_addr: K[u64];
+        length: K[u64];
+        entry_type: K[u32];
+        attributes: K[u32];
+    }
+
+    // Memory manager state
+    shape MemoryManager {
+        total_bytes: K[u64];
+        used_bytes: K[u64];
+        boot_info_available: K[bool];
+    }
+
+    // Check if memory entry is usable
+    proc K::is_usable(K[MemoryMapEntry] entry) -> K[bool] {
+        entry.entry_type == 1
+    }
+
+    // Get end address of memory entry
+    proc K::end_addr(K[MemoryMapEntry] entry) -> K[u64] {
+        entry.base_addr + entry.length
+    }
+
+    // Create new memory manager
+    proc K::manager_new() -> K[MemoryManager] {
+        MemoryManager{
+            total_bytes: 0,
+            used_bytes: 0,
+            boot_info_available: false
+        }
+    }
+
+    // Initialize from boot information
+    proc K::init_from_boot(K[MemoryManager] mgr, K[BootInfo] info) -> K[MemoryManager] {
+        let memory_map: K[Ptr[MemoryMapEntry]] = info.memory_map_addr;
+        let entry_count: K[u32] = info.memory_map_entries;
+        let mut total: K[u64] = 0;
+
+        mut let i: K[u32] = 0;
+        while i < entry_count {
+            let entry: K[MemoryMapEntry] = unsafe_load_entry(memory_map, i);
+
+            if is_usable(entry) {
+                total = total + entry.length;
+            }
+
+            i = i + 1;
+        }
+
+        MemoryManager{
+            total_bytes: total,
+            used_bytes: BOOT_STACK_SIZE,
+            boot_info_available: true
+        }
+    }
+
+    // Get total memory bytes
+    proc K::total_bytes(K[MemoryManager] mgr) -> K[u64] {
+        mgr.total_bytes
+    }
+
+    // Get used memory bytes
+    proc K::used_bytes(K[MemoryManager] mgr) -> K[u64] {
+        mgr.used_bytes
+    }
+
+    // Allocate kernel memory (simulation)
+    proc K::allocate_kernel(K[MemoryManager] mgr, K[u64] size) -> K[u64] {
+        let start: K[u64] = mgr.used_bytes;
+        let new_used: K[u64] = mgr.used_bytes + size;
+
+        MemoryManager{
+            total_bytes: mgr.total_bytes,
+            used_bytes: new_used,
+            boot_info_available: mgr.boot_info_available
+        }
+
+        start
+    }
+
+    // Allocate user memory (same as kernel for now)
+    proc K::allocate_user(K[MemoryManager] mgr, K[u64] size) -> K[u64] {
+        allocate_kernel(mgr, size)
+    }
+
+    // Helper: load memory map entry
+    proc K::unsafe_load_entry(K[Ptr[MemoryMapEntry]] map, K[u32] index) -> K[MemoryMapEntry] {
+        @load_memory_map_entry(map, index)
+    }
+
+    // Helper: boot stack size constant
+    const BOOT_STACK_SIZE: K[u64] = 16384;
+}
+

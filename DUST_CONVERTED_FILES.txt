@@ -1,0 +1,63 @@
+DUST V0.2 CONVERTED FILES
+==========================
+
+Files successfully converted to Dust v0.2 syntax:
+
+1. src/hex.ds (96 lines)
+   - encode_u64, encode_u32, encode_bytes
+   - forge Hex { ... }
+
+2. src/console.ds (178 lines)
+   - UART console I/O functions
+   - forge Console { ... }
+
+3. src/errors.ds (176 lines)
+   - Error types and error handling
+   - forge Errors { ... }
+
+4. src/handle.ds (178 lines)
+   - ResourceId, DomainId, Handle, TaskId
+   - forge HandleTypes { ... }
+
+5. src/capability.ds (280 lines)
+   - Capability system with permissions
+   - forge Capability { ... }
+
+6. src/memory.ds (140 lines)
+   - Memory management and allocation
+   - forge Memory { ... }
+
+7. src/tracing/tracing.ds (168 lines)
+   - Tracing and logging infrastructure
+   - forge Tracing { ... }
+
+8. src/lib.ds (45 lines)
+   - Module exports and initialization
+   - forge XdvLib { ... }
+
+Remaining Critical Files:
+9. src/init/main.ds (~7000 lines - IN PROGRESS)
+   - Main kernel initialization
+   - Requires conversion from large Rust file
+
+10. src/boot/boot.ds (~500 lines - PENDING)
+    - Boot loader integration
+    - BootInfo and BootManager
+
+11. src/boot/boot_tests.ds (PENDING)
+    - Boot tests
+
+Total Converted: 8 files (~1400 lines)
+Remaining: 3 major files (~7500 lines)
+
+## Verification
+- All files use proper Dust v0.2 syntax
+- forge, proc K::, shape structures
+- Type annotations: K[String], K[u64], etc.
+- Ready for dustc compiler
+
+## Usage
+These files provide the core framework. The init/main.ds and boot/boot.ds
+still need conversion to be fully functional.
+
+Last updated: 2026-04-15

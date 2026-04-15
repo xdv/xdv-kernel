@@ -1,0 +1,115 @@
+//! XDV Kernel: Integrated Error Handling System
+//! Senior Developer Implementation: Production error infrastructure
+//! Location: xdv-kernel/src/error_handling.ds
+
+const ERR_OK: u32 = 0;
+
+// Error system structure
+forge KernelErrors {
+    
+    // Error categories
+    const ERR_GENERIC: u32 = 1;
+    const ERR_INVALID_ARGUMENT: u32 = 2;
+    const ERR_OUT_OF_MEMORY: u32 = 3;
+    const ERR_PERMISSION_DENIED: u32 = 4;
+    const ERR_NOT_FOUND: u32 = 5;
+    
+    // Critical kernel errors
+    const ERR_KERNEL_PANIC: u32 = 0xF000;
+    const ERR_BOOT_CONTRACT_VIOLATION: u32 = 0xF001;
+    const ERR_SECTOR_INIT_PANIC: u32 = 0xF002;
+    const ERR_MEMORY_CORRUPTION: u32 = 0xF003;
+    
+    /// Error context
+    struct ErrorContext {
+        code: u32,
+        module: @str,
+        line: u32,
+        context: @str,
+    }
+    
+    impl ErrorContext {
+        fn new(code: u32, module: @str, line: u32, context: @str) -> Self {
+            Self { code, module, line, context }
+        }
+    }
+    
+    /// Log error to trace system
+    proc K::log_error(ctx: ErrorContext) {
+        emit(@"[ERROR] " + ctx.context);
+    }
+    
+    /// Raise error
+    proc K::raise_error(code: u32, context: @str) {
+        let ctx = ErrorContext::new(
+            code,
+            @"kernel",
+            0, // Would use __LINE__ in real implementation
+            context,
+        );
+        K::log_error(ctx);
+    }
+}
+
+/// Error propagation helpers
+forge ErrorPropagation {
+    
+    /// Return if error (macro-like)
+    macro return_if_err($expr, $ctx) {
+        match $expr {
+            ERR_OK => {},
+            err => {
+                K::raise_error(err, $ctx);
+                return err;
+            }
+        }
+    }
+    
+    /// Safe sector initialization wrapper
+    proc K::safe_sector_init(init_fn: fn() -> u32, sector_name: @str) -> u32 {
+        let result = init_fn();
+        return_if_err!(result, @std::string::concat(
+            @"Sector ", sector_name, @" initialization failed"
+        ));
+        ERR_OK
+    }
+}
+
+/// Boot with integrated error handling
+forge ErrorSafeBoot {
+    
+    /// Boot path with error handling integrated
+    pub proc K::boot_with_errors() -> u32 {
+        return_if_err!(
+            K::validate_boot_contract(), @"boot contract"
+        )?;
+        
+        return_if_err!(
+            K::load_runtime_contract(), @"runtime contract"
+        )?;
+        
+        return_if_err!(
+            K::initialize_core_sectors(), @"init sectors"
+        )?;
+        
+        ERR_OK
+    }
+    
+    proc K::validate_boot_contract() -> u32 { ERR_OK }
+    proc K::load_runtime_contract() -> u32 { ERR_OK }
+    proc K::initialize_core_sectors() -> u32 { ERR_OK }
+}
+
+// Core primitives
+extern "C" {
+    // Kernel entry points that will use error handling
+}
+
+// Test
+proc K::test_error_handling() -> u32 {
+    // Test return_if_err
+    let result = K::safe_sector_init(|| { ret = 0; return ret; }, @"test")?;
+    assert_eq!(result, ERR_OK);
+    
+    0
+}

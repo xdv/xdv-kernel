@@ -1,0 +1,4 @@
+// Test Dust syntax transform
+K main {
+    emit "Testing Dust kernel";
+}
