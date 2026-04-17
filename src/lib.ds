@@ -1,46 +1,40 @@
-// XDV Kernel Library Root
-// Central module exports all kernel subsystems
+// XDV Kernel: Library Root
+// Central exports and re-exports
 
 forge XdvLib {
-    // Re-export all core modules as capabilities
-    proc K::hex_module() -> K[Hex] {
+    proc K::module_hex() -> K[Hex] {
         Hex
     }
 
-    proc K::console_module() -> K[Console] {
-        Console
-    }
-
-    proc K::handle_module() -> K[HandleTypes] {
-        HandleTypes
-    }
-
-    proc K::errors_module() -> K[Errors] {
+    proc K::module_errors() -> K[Errors] {
         Errors
     }
 
-    proc K::capability_module() -> K[Capability] {
+    proc K::module_handle() -> K[HandleTypes] {
+        HandleTypes
+    }
+
+    proc K::module_console() -> K[Console] {
+        Console
+    }
+
+    proc K::module_capability() -> K[Capability] {
         Capability
     }
 
-    proc K::memory_module() -> K[Memory] {
+    proc K::module_memory() -> K[Memory] {
         Memory
     }
 
-    proc K::tracing_module() -> K[Tracing] {
+    proc K::module_tracing() -> K[Tracing] {
         Tracing
     }
 
-    // Initialize all modules
-    proc K::init_all() -> K[Unit] {
-        Console::early_init();
-        Tracing::tracer_early_init();
-        emit "All kernel modules initialized";
+    proc K::module_boot() -> K[Boot] {
+        Boot
     }
 
-    // Get kernel version
-    proc K::kernel_version() -> K[String] {
-        @kernel_version()
+    proc K::module_kernel() -> K[Kernel] {
+        Kernel
     }
 }
-

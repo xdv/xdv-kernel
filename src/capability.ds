@@ -1,192 +1,86 @@
 // XDV Kernel: Capability System
-// Basic capability-based security model
+// Capability-based security
 
 forge Capability {
-    // Permission flags as bit mask
     shape PermissionFlags {
         bits: K[u8];
     }
 
-    // Capability structure
     shape Capability {
-        resource: ResourceId;
-        domain: DomainId;
-        permissions: PermissionFlags;
+        resource: K[ResourceId];
+        domain: K[DomainId];
+        perms: K[PermissionFlags];
     }
 
-    // CapabilityManager for per-process storage
     shape CapabilityManager {
-        count: K[u32];
+        entries_count: K[u32];
     }
 
-    // Empty permission flags
-    proc K::permission_empty() -> K[PermissionFlags] {
+    proc K::perm_none() -> K[PermissionFlags] {
         PermissionFlags{bits: 0}
     }
 
-    // Full permission (read | write | execute)
-    proc K::permission_full() -> K[PermissionFlags] {
-        PermissionFlags{bits: 7}
-    }
-
-    // Read permission only
-    proc K::permission_read() -> K[PermissionFlags] {
+    proc K::perm_read() -> K[PermissionFlags] {
         PermissionFlags{bits: 1}
     }
 
-    // Write permission only
-    proc K::permission_write() -> K[PermissionFlags] {
+    proc K::perm_write() -> K[PermissionFlags] {
         PermissionFlags{bits: 2}
     }
 
-    // Execute permission only
-    proc K::permission_execute() -> K[PermissionFlags] {
+    proc K::perm_execute() -> K[PermissionFlags] {
         PermissionFlags{bits: 4}
     }
 
-    // Check read allowed
-    proc K::can_read(K[PermissionFlags] flags) -> K[bool] {
-        (flags.bits & 1) != 0
+    proc K::perm_full() -> K[PermissionFlags] {
+        PermissionFlags{bits: 7}
     }
 
-    // Check write allowed
-    proc K::can_write(K[PermissionFlags] flags) -> K[bool] {
-        (flags.bits & 2) != 0
+    proc K::can_read(K[PermissionFlags] p) -> K[bool] {
+        (p.bits & 1) != 0
     }
 
-    // Check execute allowed
-    proc K::can_execute(K[PermissionFlags] flags) -> K[bool] {
-        (flags.bits & 4) != 0
+    proc K::can_write(K[PermissionFlags] p) -> K[bool] {
+        (p.bits & 2) != 0
     }
 
-    // Union of permissions
-    proc K::permission_union(K[PermissionFlags] a, K[PermissionFlags] b) -> K[PermissionFlags] {
-        PermissionFlags{bits: (a.bits | b.bits)}
+    proc K::can_execute(K[PermissionFlags] p) -> K[bool] {
+        (p.bits & 4) != 0
     }
 
-    // Intersection of permissions
-    proc K::permission_intersect(K[PermissionFlags] a, K[PermissionFlags] b) -> K[PermissionFlags] {
-        PermissionFlags{bits: (a.bits & b.bits)}
+    proc K::read_only(K[ResourceId] r, K[DomainId] d) -> K[Capability] {
+        Capability{resource: r, domain: d, perms: perm_read()}
     }
 
-    // Create read-only capability
-    proc K::read_only(K[ResourceId] res, K[DomainId] dom) -> K[Capability] {
-        let flags: K[PermissionFlags] = permission_read();
-        Capability{resource: res, domain: dom, permissions: flags}
+    proc K::write_only(K[ResourceId] r, K[DomainId] d) -> K[Capability] {
+        Capability{resource: r, domain: d, perms: perm_write()}
     }
 
-    // Create write-only capability
-    proc K::write_only(K[ResourceId] res, K[DomainId] dom) -> K[Capability] {
-        let flags: K[PermissionFlags] = permission_write();
-        Capability{resource: res, domain: dom, permissions: flags}
+    proc K::read_write(K[ResourceId] r, K[DomainId] d) -> K[Capability] {
+        let p1: K[PermissionFlags] = perm_read();
+        let p2: K[PermissionFlags] = perm_write();
+        let p: K[PermissionFlags] = PermissionFlags{bits: (p1.bits | p2.bits)};
+        Capability{resource: r, domain: d, perms: p}
     }
 
-    // Create read-write capability
-    proc K::read_write(K[ResourceId] res, K[DomainId] dom) -> K[Capability] {
-        let read_flag: K[PermissionFlags] = permission_read();
-        let write_flag: K[PermissionFlags] = permission_write();
-        let flags: K[PermissionFlags] = permission_union(read_flag, write_flag);
-        Capability{resource: res, domain: dom, permissions: flags}
+    proc K::capability_resource(K[Capability] c) -> K[ResourceId] {
+        c.resource
     }
 
-    // Create full capability (read | write | execute)
-    proc K::full(K[ResourceId] res, K[DomainId] dom) -> K[Capability] {
-        let flags: K[PermissionFlags] = permission_full();
-        Capability{resource: res, domain: dom, permissions: flags}
+    proc K::capability_domain(K[Capability] c) -> K[DomainId] {
+        c.domain
     }
 
-    // Get resource from capability
-    proc K::capability_resource(K[Capability] cap) -> K[ResourceId] {
-        cap.resource
+    proc K::capability_perms(K[Capability] c) -> K[PermissionFlags] {
+        c.perms
     }
 
-    // Get domain from capability
-    proc K::capability_domain(K[Capability] cap) -> K[DomainId] {
-        cap.domain
+    proc K::manager_new() -> K[CapabilityManager] {
+        CapabilityManager{entries_count: 0}
     }
 
-    // Get permissions from capability
-    proc K::capability_permissions(K[Capability] cap) -> K[PermissionFlags] {
-        cap.permissions
-    }
-
-    // Check if read allowed
-    proc K::capability_can_read(K[Capability] cap) -> K[bool] {
-        can_read(cap.permissions)
-    }
-
-    // Check if write allowed
-    proc K::capability_can_write(K[Capability] cap) -> K[bool] {
-        can_write(cap.permissions)
-    }
-
-    // Check if execute allowed
-    proc K::capability_can_execute(K[Capability] cap) -> K[bool] {
-        can_execute(cap.permissions)
-    }
-
-    // Validate capability for domain
-    proc K::validate_for_domain(K[Capability] cap, K[DomainId] domain) -> K[Error] {
-        let cap_domain: K[DomainId] = cap.domain;
-        if cap_domain.value == domain.value {
-            Errors::ok()
-        } else {
-            Errors::domain_mismatch("Capability domain mismatch")
-        }
-    }
-
-    // Derive reduced capability (restrict permissions)
-    proc K::derive(K[Capability] cap, K[PermissionFlags] new_perms) -> K[Capability] {
-        // Can only reduce permissions, not expand
-        if can_read(cap.permissions) {
-            if !can_read(new_perms) {
-                return Errors::invalid_state("Cannot reduce read permission")
-            }
-        }
-        if can_write(cap.permissions) {
-            if !can_write(new_perms) {
-                return Errors::invalid_state("Cannot reduce write permission")
-            }
-        }
-        if can_execute(cap.permissions) {
-            if !can_execute(new_perms) {
-                return Errors::invalid_state("Cannot reduce execute permission")
-            }
-        }
-
-        Capability{
-            resource: cap.resource,
-            domain: cap.domain,
-            permissions: new_perms
-        }
-    }
-
-    // Create new capability manager
-    proc K::capability_manager_new() -> K[CapabilityManager] {
-        CapabilityManager{count: 0}
-    }
-
-    // Get capability count
-    proc K::capability_manager_count(K[CapabilityManager] mgr) -> K[u32] {
-        mgr.count
-    }
-
-    // Add capability to manager
-    proc K::capability_manager_add(K[CapabilityManager] mgr, K[Capability] cap) -> K[CapabilityManager] {
-        // In real impl: store in vector/array
-        CapabilityManager{count: mgr.count + 1}
-    }
-
-    // Check if manager contains capability for resource
-    proc K::capability_manager_contains(K[CapabilityManager] mgr, K[ResourceId] res) -> K[bool] {
-        // In real impl: search stored capabilities
-        @check_contains(mgr, res)
-    }
-
-    // Check if manager has required permissions
-    proc K::capability_manager_check(K[CapabilityManager] mgr, K[ResourceId] res, K[PermissionFlags] perms) -> K[bool] {
-        // In real impl: find capability and check permissions
-        @check_permission(mgr, res, perms)
+    proc K::manager_add(K[CapabilityManager] mgr, K[Capability] cap) -> K[CapabilityManager] {
+        CapabilityManager{entries_count: mgr.entries_count + 1}
+        // Store cap in some structure in real impl
     }
 }
-

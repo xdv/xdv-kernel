@@ -1,112 +1,51 @@
-// XDV Kernel: Handle/ID Types
-// Defines resource and domain identifiers
+// XDV Kernel: Handle System
+// Resource IDs, domain IDs, and handles
 
 forge HandleTypes {
-    // Resource identifier (capability handle)
     shape ResourceId {
-        value: K[u32];
+        id: K[u32];
     }
 
-    // Domain identifier (computation domain)
     shape DomainId {
         value: K[u8];
     }
 
-    // Unified handle for resources across domains
     shape Handle {
-        value: K[u32];
+        bits: K[u32];
     }
 
-    // Task identifier
-    shape TaskId {
-        value: K[u32];
+    proc K::resource(K[u32] id) -> K[ResourceId] {
+        ResourceId{id: id}
     }
 
-    // Builder for handle identifiers
-    shape HandleBuilder {
-        domain: DomainId;
-        resource: ResourceId;
-    }
-
-    // Create new ResourceId
-    proc K::new_resource_id(K[u32] id) -> K[ResourceId] {
-        ResourceId{value: id}
-    }
-
-    // Get ResourceId value
-    proc K::resource_id_value(K[ResourceId] rid) -> K[u32] {
-        rid.value
-    }
-
-    // Check if ResourceId is valid
-    proc K::is_valid_resource(K[ResourceId] rid) -> K[bool] {
-        let value: K[u32] = rid.value;
-        (value != 0) && (value <= 0xFFFFFF)
-    }
-
-    // Create DomainId for K domain
     proc K::domain_k() -> K[DomainId] {
         DomainId{value: 0}
     }
 
-    // Create DomainId for Q domain
     proc K::domain_q() -> K[DomainId] {
         DomainId{value: 1}
     }
 
-    // Create DomainId for Phi domain
     proc K::domain_phi() -> K[DomainId] {
         DomainId{value: 2}
     }
 
-    // Get domain name
-    proc K::domain_name(K[DomainId] domain) -> K[String] {
-        match domain.value {
-            0 => "K",
-            1 => "Q",
-            2 => "Phi",
-            _ => "Unknown"
-        }
+    proc K::handle(K[ResourceId] res, K[DomainId] dom) -> K[Handle] {
+        let resource_bits: K[u32] = res.id;
+        let domain_bits: K[u32] = dom.value as K[u32];
+        Handle{bits: (domain_bits << 24) | resource_bits}
     }
 
-    // Get domain type code
-    proc K::domain_code(K[DomainId] domain) -> K[u8] {
-        domain.value
+    proc K::get_resource(K[Handle] h) -> K[ResourceId] {
+        resource(h.bits & 0xFFFFFF)
     }
 
-    // Create new Handle
-    proc K::new_handle(K[ResourceId] res, K[DomainId] dom) -> K[Handle] {
-        let res_val: K[u32] = res.value;
-        let dom_code: K[u8] = dom.value;
-        let handle_val: K[u32] = ((dom_code as K[u32]) << 24) | res_val;
-        Handle{value: handle_val}
+    proc K::get_domain(K[Handle] h) -> K[DomainId] {
+        let dom_val: K[u8] = ((h.bits >> 24) & 0xFF) as K[u8];
+        DomainId{value: dom_val}
     }
 
-    // Get domain from handle
-    proc K::handle_domain(K[Handle] h) -> K[DomainId] {
-        let domain_code: K[u8] = ((h.value >> 24) & 0xFF) as K[u8];
-        DomainId{value: domain_code}
-    }
-
-    // Get resource from handle
-    proc K::handle_resource(K[Handle] h) -> K[ResourceId] {
-        let res_val: K[u32] = h.value & 0xFFFFFF;
-        ResourceId{value: res_val}
-    }
-
-    // Check if handle is valid
     proc K::is_valid_handle(K[Handle] h) -> K[bool] {
-        h.value != 0
-    }
-
-    // Create new TaskId
-    proc K::new_task_id(K[u32] id) -> K[TaskId] {
-        TaskId{value: id}
-    }
-
-    // Get TaskId value
-    proc K::task_id_value(K[TaskId] tid) -> K[u32] {
-        tid.value
+        h.bits != 0
     }
 }
-

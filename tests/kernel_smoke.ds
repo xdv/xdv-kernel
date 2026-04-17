@@ -1,0 +1,55 @@
+// Kernel Smoke Test
+// Validates basic functionality
+
+forge SmokeTest {
+    proc K::test_hex() -> K[bool] {
+        // Test hex encoding
+        let s: K[String] = Hex::encode_u64(0xDEADBEEF);
+        emit s;
+        true
+    }
+
+    proc K::test_errors() -> K[bool] {
+        let e: K[Error] = Errors::invalid_arg("test");
+        true  // Should not panic
+    }
+
+    proc K::test_handle() -> K[bool] {
+        let r: K[ResourceId] = HandleTypes::resource(0x1000);
+        let d: K[DomainId] = HandleTypes::domain_k();
+        let h: K[Handle] = HandleTypes::handle(r, d);
+        true
+    }
+
+    proc K::test_capability() -> K[bool] {
+        let r: K[ResourceId] = HandleTypes::resource(0x2000);
+        let d: K[DomainId] = HandleTypes::domain_k();
+        let cap: K[Capability] = Capability::read_write(r, d);
+        Capability::capability_can_read(cap)
+    }
+
+    proc K::test_memory() -> K[bool] {
+        let mgr: K[MemoryManager] = Memory::manager_new();
+        Memory::total(mgr) == 0
+    }
+
+    proc K::test_console() -> K[Unit] {
+        Console::early_init();
+        Console::println("Kernel smoke test");
+    }
+
+    proc K::test_shim() -> K[Unit] {
+        test_hex();
+        test_errors();
+        test_handle();
+        test_capability();
+        test_memory();
+        test_console();
+    }
+}
+
+// Main entry
+craft K::smoke_main() {
+    SmokeTest::test_shim();
+    emit "All smoke tests passed";
+}

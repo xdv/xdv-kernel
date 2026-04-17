@@ -2,39 +2,48 @@
 // Simple hex encoding for debug output and addresses
 
 forge Hex {
-    const HEX_DIGITS: K[String] = "0123456789abcdef";
+    proc K::encode_u64(K[u64] val) -> K[String] {
+        mut let out: K[String] = "";
+        mut let v: K[u64] = val;
+        mut let shift: K[u64] = 60;
 
-    // Encode u64 as hex string
-    proc K::encode_u64(K[u64] value) -> K[String] {
+        while shift >= 0 {
+            let nibble: K[u8] = ((v >> shift) & 0xF) as K[u8];
+            let hex_char: K[String] = @to_hex_char(nibble);
+            out = out + hex_char;
+            if shift == 0 {
+                break;
+            }
+            shift = shift - 4;
+        }
+
+        out
+    }
+
+    proc K::encode_u32(K[u32] val) -> K[String] {
+        encode_u64(val as K[u64])
+    }
+
+    proc K::encode_bytes(K[Ptr[u8]] ptr, K[u64] len) -> K[String] {
         mut let result: K[String] = "";
-        mut let temp: K[u64] = value;
-        mut let i: K[Int] = 0;
+        mut let i: K[u64] = 0;
+        let mut bytes_left: K[u64] = len;
 
-        while i < 16 {
-            let digit: K[u8] = (temp & 0xF) as K[u8];
-            let hex_digit: K[String] = get_hex_digit(digit);
-            result = hex_digit + result;
-            temp = temp >> 4;
+        while i < len {
+            let byte: K[u8] = unsafe_load_u8(ptr + i);
+            result = result + encode_u32(byte as K[u32]);
             i = i + 1;
         }
 
         result
     }
 
-    // Encode u32 as hex string
-    proc K::encode_u32(K[u32] value) -> K[String] {
-        let value64: K[u64] = value as K[u64];
-        encode_u64(value64)
+    proc K::to_hex_char(K[u8] nibble) -> K[String] {
+        const HEX: K[String] = "0123456789abcdef";
+        unsafe_substring(HEX, nibble as K[u64], 1)
     }
 
-    // Get hex digit character
-    proc K::get_hex_digit(K[u8] digit) -> K[String] {
-        let index: K[Int] = digit as K[Int];
-        unsafe_substring(HEX_DIGITS, index, 1)
-    }
-
-    // Helper to simulate unsafe_substring
-    proc K::unsafe_substring(K[String] s, K[Int] start, K[Int] len) -> K[String] {
-        @format("substr({},{},{})", s, start, len)
+    proc K::unsafe_substring(K[String] s, K[u64] pos, K[u64] len) -> K[String] {
+        @substr(s, pos, len)
     }
 }

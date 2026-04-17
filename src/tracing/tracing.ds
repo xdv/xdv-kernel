@@ -2,160 +2,59 @@
 // Structured logging and diagnostics
 
 forge Tracing {
-    // Log levels
-    shape TraceLevel {
+    const TRACE_ERROR: K[u8] = 0;
+    const TRACE_WARNING: K[u8] = 1;
+    const TRACE_INFO: K[u8] = 2;
+    const TRACE_DEBUG: K[u8] = 3;
+    const TRACE_TRACE: K[u8] = 4;
+
+    shape Level {
         value: K[u8];
     }
 
-    // Trace filter (minimum level)
-    shape TraceFilter {
-        value: K[u8];
+    shape Filter {
+        min_level: K[u8];
     }
 
-    // Kernel tracer
     shape KernelTracer {
-        name: K[String];
-        filter: TraceFilter;
+        name: K[u64];
+        filter: K[Filter];
     }
 
-    // Global tracer singleton (simulated)
-    shape GlobalTracer {
-        is_initialized: K[bool];
+    proc K::level_error() -> K[Level] {
+        Level{value: TRACE_ERROR}
     }
 
-    // Level constants
-    const TRACE_OFF: K[u8] = 0;
-    const TRACE_ERROR: K[u8] = 1;
-    const TRACE_WARNING: K[u8] = 2;
-    const TRACE_INFO: K[u8] = 3;
-    const TRACE_DEBUG: K[u8] = 4;
-    const TRACE_TRACE: K[u8] = 5;
-
-    // Create Error level
-    proc K::level_error() -> K[TraceLevel] {
-        TraceLevel{value: TRACE_ERROR}
+    proc K::level_warning() -> K[Level] {
+        Level{value: TRACE_WARNING}
     }
 
-    // Create Warning level
-    proc K::level_warning() -> K[TraceLevel] {
-        TraceLevel{value: TRACE_WARNING}
+    proc K::level_info() -> K[Level] {
+        Level{value: TRACE_INFO}
     }
 
-    // Create Info level
-    proc K::level_info() -> K[TraceLevel] {
-        TraceLevel{value: TRACE_INFO}
+    proc K::level_debug() -> K[Level] {
+        Level{value: TRACE_DEBUG}
     }
 
-    // Create Debug level
-    proc K::level_debug() -> K[TraceLevel] {
-        TraceLevel{value: TRACE_DEBUG}
+    proc K::level_trace() -> K[Level] {
+        Level{value: TRACE_TRACE}
     }
 
-    // Create Trace level
-    proc K::level_trace() -> K[TraceLevel] {
-        TraceLevel{value: TRACE_TRACE}
+    proc K::filter(K[Level] level, K[Filter] f) -> K[bool] {
+        level.value >= f.min_level
     }
 
-    // Create Off filter
-    proc K::filter_off() -> K[TraceFilter] {
-        TraceFilter{value: TRACE_OFF}
-    }
-
-    // Create Error filter
-    proc K::filter_error() -> K[TraceFilter] {
-        TraceFilter{value: TRACE_ERROR}
-    }
-
-    // Create Warning filter
-    proc K::filter_warning() -> K[TraceFilter] {
-        TraceFilter{value: TRACE_WARNING}
-    }
-
-    // Create Info filter
-    proc K::filter_info() -> K[TraceFilter] {
-        TraceFilter{value: TRACE_INFO}
-    }
-
-    // Create Debug filter
-    proc K::filter_debug() -> K[TraceFilter] {
-        TraceFilter{value: TRACE_DEBUG}
-    }
-
-    // Create Trace filter
-    proc K::filter_trace() -> K[TraceFilter] {
-        TraceFilter{value: TRACE_TRACE}
-    }
-
-    // Check if level enabled at current filter
-    proc K::level_enabled(K[TraceLevel] level, K[TraceFilter] filter) -> K[bool] {
-        level.value <= filter.value
-    }
-
-    // Create new kernel tracer
-    proc K::tracer_new(K[String] name) -> K[KernelTracer] {
+    proc K::tracer_new(K[u64] name_ptr) -> K[KernelTracer] {
         KernelTracer{
-            name: name,
-            filter: filter_info()
+            name: name_ptr,
+            filter: Filter{min_level: TRACE_INFO}
         }
     }
 
-    // Early initialization
-    proc K::tracer_early_init() -> K[Unit] {
-        Console::early_init()
-    }
-
-    // Log error message
-    proc K::tracer_error(K[String] msg) -> K[Unit] {
-        emit "[ERROR] {msg}";
-    }
-
-    // Log warning message
-    proc K::tracer_warning(K[String] msg) -> K[Unit] {
-        emit "[WARN] {msg}";
-    }
-
-    // Log info message
-    proc K::tracer_info(K[String] msg) -> K[Unit] {
-        emit "[INFO] {msg}";
-    }
-
-    // Log debug message
-    proc K::tracer_debug(K[String] msg) -> K[Unit] {
-        emit "[DEBUG] {msg}";
-    }
-
-    // Log trace message
-    proc K::tracer_trace(K[String] msg) -> K[Unit] {
-        emit "[TRACE] {msg}";
-    }
-
-    // Log phase transition
-    proc K::tracer_phase(K[String] phase) -> K[Unit] {
-        emit "Phase: {phase}";
-    }
-
-    // Flush any buffered output
-    proc K::tracer_flush() -> K[Unit] {
-        Console::flush()
-    }
-
-    // Set trace filter
-    proc K::set_filter(K[TraceFilter] filter) -> K[Unit] {
-        // Update global filter
-        @set_global_filter(filter)
-    }
-
-    // Get global tracer (simulated)
-    proc K::global_tracer() -> K[KernelTracer] {
-        KernelTracer{
-            name: "kernel",
-            filter: filter_info()
+    proc K::tracer_log(K[KernelTracer] t, K[Level] lvl, K[u64] msg_ptr) -> K[Unit] {
+        if filter(lvl, t.filter) {
+            Console::println("TRACE LOG");
         }
-    }
-
-    // Initialize global tracer
-    proc K::init_global_tracer(K[String] name) -> K[Unit] {
-        @initialize_tracer(name)
     }
 }
-

@@ -1,92 +1,42 @@
-// XDV Kernel: Error Types
-// Common error handling across kernel modules
+// XDV Kernel: Error System
+// Canonical error codes and handling
 
 forge Errors {
-    const ERR_OK: K[u32] = 0;
-    const ERR_GENERIC: K[u32] = 1;
-    const ERR_INVALID_ARGUMENT: K[u32] = 2;
-    const ERR_PERMISSION_DENIED: K[u32] = 3;
-    const ERR_NOT_FOUND: K[u32] = 4;
-    const ERR_RESOURCE_BUSY: K[u32] = 5;
-    const ERR_OUT_OF_MEMORY: K[u32] = 6;
-    const ERR_INVALID_STATE: K[u32] = 7;
-    const ERR_IO: K[u32] = 8;
-    const ERR_TIMEOUT: K[u32] = 9;
-    const ERR_NOT_IMPLEMENTED: K[u32] = 10;
-
     shape ErrorCode {
         value: K[u32];
     }
 
     shape Error {
         code: ErrorCode;
-        module: K[String];
-        line: K[u32];
-        context: K[String];
+        context: K[u64];
     }
 
-    // Create new error
-    proc K::new_error(K[ErrorCode] code, K[String] module, K[u32] line, K[String] context) -> K[Error] {
-        @make_error(code, module, line, context)
+    const ERR_OK: K[u32] = 0;
+    const ERR_GENERIC: K[u32] = 1;
+    const ERR_INVALID_ARGUMENT: K[u32] = 2;
+    const ERR_NOT_FOUND: K[u32] = 4;
+    const ERR_OUT_OF_MEMORY: K[u32] = 6;
+
+    proc K::make_error(K[ErrorCode] c, K[u64] ctx) -> K[Error] {
+        Error{code: c, context: ctx}
     }
 
-    // Create invalid argument error
-    proc K::invalid_argument(K[String] context) -> K[Error] {
-        new_error(ErrorCode{value: ERR_INVALID_ARGUMENT}, "kernel", __LINE__, context)
-    }
-
-    // Create invalid state error
-    proc K::invalid_state(K[String] context) -> K[Error] {
-        new_error(ErrorCode{value: ERR_INVALID_STATE}, "kernel", __LINE__, context)
-    }
-
-    // Create not found error
-    proc K::not_found(K[String] context) -> K[Error] {
-        new_error(ErrorCode{value: ERR_NOT_FOUND}, "kernel", __LINE__, context)
-    }
-
-    // Create permission denied error
-    proc K::permission_denied(K[String] context) -> K[Error] {
-        new_error(ErrorCode{value: ERR_PERMISSION_DENIED}, "kernel", __LINE__, context)
-    }
-
-    // Create IO error
-    proc K::io_error(K[String] context) -> K[Error] {
-        new_error(ErrorCode{value: ERR_IO}, "kernel", __LINE__, context)
-    }
-
-    // Get error code
-    proc K::get_code(K[Error] err) -> K[ErrorCode] {
-        err.code
-    }
-
-    // Get error message
-    proc K::get_context(K[Error] err) -> K[String] {
-        err.context
-    }
-
-    // Get line number
-    proc K::get_line(K[Error] err) -> K[u32] {
-        err.line
-    }
-
-    // Get module name
-    proc K::get_module(K[Error] err) -> K[String] {
-        err.module
-    }
-
-    // Format error to string
-    proc K::format_error(K[Error] err) -> K[String] {
-        @format("Error[{}] {}:{} - {}", err.code.value, err.module, err.line, err.context)
-    }
-
-    // Create an OK result
     proc K::ok() -> K[Error] {
-        new_error(ErrorCode{value: ERR_OK}, "", 0, "Success")
+        make_error(ErrorCode{value: ERR_OK}, 0)
     }
 
-    // Helper to format string (placeholder)
-    proc K::make_error(K[ErrorCode] code, K[String] module, K[u32] line, K[String] context) -> K[Error] {
-        @construct_error(code, module, line, context)
+    proc K::invalid_arg(K[String] msg) -> K[Error] {
+        let ctx: K[u64] = @string_addr(msg);
+        make_error(ErrorCode{value: ERR_INVALID_ARGUMENT}, ctx)
+    }
+
+    proc K::not_found(K[String] msg) -> K[Error] {
+        let ctx: K[u64] = @string_addr(msg);
+        make_error(ErrorCode{value: ERR_NOT_FOUND}, ctx)
+    }
+
+    proc K::oom(K[String] msg) -> K[Error] {
+        let ctx: K[u64] = @string_addr(msg);
+        make_error(ErrorCode{value: ERR_OUT_OF_MEMORY}, ctx)
     }
 }

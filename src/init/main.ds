@@ -1,188 +1,81 @@
-// XDV Kernel: Main Initialization Entry Point
-// Primary kernel initialization and main loop
+// XDV Kernel: Main Initialization
+// Kernel startup and main loop
 
-forge KernelMain {
-    // Shape representing kernel instance
-    shape Kernel {
-        memory_mgr: K[MemoryManager];
-        capability_mgr: K[CapabilityManager];
-        tracer: K[KernelTracer];
-        boot_info_available: K[bool];
+forge Kernel {
+    shape Process {
+        pid: K[u32];
+        state: K[u32];
     }
 
-    // Kernel version constant
-    const KERNEL_VERSION: K[String] = "0.3.0";
-
-    // Create new kernel instance
-    proc K::kernel_new() -> K[Kernel] {
-        Kernel{
-            memory_mgr: Memory::manager_new(),
-            capability_mgr: Capability::capability_manager_new(),
-            tracer: Tracing::tracer_new("kernel"),
-            boot_info_available: false
-        }
+    shape KernelState {
+        initialized: K[bool];
+        tick: K[u64];
+        should_shutdown: K[bool];
     }
 
-    // Initialize kernel from bootloader
-    proc K::kernel_init(K[Kernel] kernel, K[BootInfo] info) -> K[Kernel] {
-        let tracer: K[KernelTracer] = kernel.tracer;
-        Tracing::tracer_info("Starting XDV Kernel initialization");
-        Tracing::tracer_info(KERNEL_VERSION);
+    proc K::main() -> K[Unit] {
+        Boot::boot_init(Boot::boot_info());
 
-        // Initialize memory subsystem
-        Tracing::tracer_phase("Memory");
-        let mem_mgr: K[MemoryManager] = Memory::init_from_boot(
-            kernel.memory_mgr,
-            info
-        );
+        let tracer: K[KernelTracer] = Tracing::tracer_new(@kernel_name());
+        Tracing::set_filter(Tracing::filter_debug());
 
-        // Initialize capability subsystem
-        Tracing::tracer_phase("Capabilities");
-        let cap_mgr: K[CapabilityManager] = initialize_capabilities();
+        Console::println("XDV Kernel v0.3.0");
+        Console::println("Build: 20260415");
+        Console::println("Phase: Bootstrap");
 
-        // Initialize core services
-        Tracing::tracer_phase("Core Services");
-        initialize_services();
-
-        Tracing::tracer_info("Kernel initialization complete");
-
-        Kernel{
-            memory_mgr: mem_mgr,
-            capability_mgr: cap_mgr,
-            tracer: tracer,
-            boot_info_available: true
-        }
+        init_subsystems();
+        run_loop();
     }
 
-    // Initialize capability system
-    proc K::initialize_capabilities() -> K[CapabilityManager] {
-        let mgr: K[CapabilityManager] = Capability::capability_manager_new();
-        let res: K[ResourceId] = Handle::new_resource_id(0xFE000000);
-        let dom: K[DomainId] = Handle::domain_k();
-        let cap: K[Capability] = Capability::read_write(res, dom);
+    proc K::init_subsystems() -> K[Unit] {
+        // Memory init
+        let mem: K[MemoryManager] = Memory::parse_boot(Boot::boot_info());
 
-        Capability::capability_manager_add(mgr, cap);
-        Tracing::tracer_info("Capabilities initialized");
+        // Capabilities init
+        let r: K[ResourceId] = HandleTypes::resource(0xFE000000);
+        let d: K[DomainId] = HandleTypes::domain_k();
+        let cap: K[Capability] = Capability::read_write(r, d);
 
-        mgr
-    }
-
-    // Initialize core services (console, interrupts, scheduler)
-    proc K::initialize_services() -> K[Unit] {
-        Tracing::tracer_info("Initializing console with capabilities");
+        // Console init
         Console::init_with_capabilities();
-
-        Tracing::tracer_info("Initializing interrupts");
-        @initialize_interrupts();
-
-        Tracing::tracer_info("Initializing scheduler");
-        @initialize_scheduler();
     }
 
-    // Enter main kernel loop
-    proc K::kernel_run(K[Kernel] kernel) -> K[Unit] {
-        let tracer: K[KernelTracer] = kernel.tracer;
-        Tracing::tracer_info("Entering kernel main loop");
-
+    proc K::run_loop() -> K[Unit] {
         mut let tick: K[u64] = 0;
-        let mut should_continue: K[bool] = true;
+        mut let running: K[bool] = true;
 
-        while should_continue {
-            // Handle pending interrupts
-            @handle_interrupts();
+        while running {
+            let do_shutdown: K[bool] = check_shutdown();
 
-            // Run scheduler tick
-            @scheduler_tick(tick);
+            if !do_shutdown {
+                on_tick(tick);
+                tick = tick + 1;
 
-            // Check for shutdown requests
-            let shutdown_requested: K[bool] = check_shutdown();
-            if shutdown_requested {
-                should_continue = false;
-            }
-
-            tick = tick + 1;
-
-            // Periodic debug logging
-            if tick % 1000 == 0 {
-                Tracing::tracer_debug(@format("Kernel tick {}", tick));
+                if tick % 1000 == 0 {
+                    let t: K[KernelTracer] = Tracing::tracer_new("tick");
+                    Tracing::set_filter(Tracing::filter_info());
+                }
+            } else {
+                running = false;
             }
         }
-
-        Tracing::tracer_info("Exiting main loop");
-        kernel_shutdown();
     }
 
-    // Check if shutdown requested
+    proc K::on_tick(K[u64] tick) -> K[Unit] {
+        @scheduler_tick(tick);
+        @process_tick();
+    }
+
     proc K::check_shutdown() -> K[bool] {
-        let status: K[u32] = @get_shutdown_status();
+        let status: K[u8] = unsafe_load_status();
         status != 0
     }
 
-    // Graceful kernel shutdown
-    proc K::kernel_shutdown() -> K[Unit] {
-        Tracing::tracer_info("Kernel shutdown initiated");
-
-        Tracing::tracer_info("Shutting down scheduler");
-        @shutdown_scheduler();
-
-        Tracing::tracer_info("Shutting down console");
-        Console::shutdown();
-
-        Tracing::tracer_info("Kernel shutdown complete");
+    proc K::unsafe_load_status() -> K[u8] {
+        @load_shutdown_flag()
     }
 
-    // Kernel panic handler
-    proc K::kernel_panic(K[String] message) -> K[Unit] {
-        Console::emergency_print("KERNEL PANIC");
-        Console::emergency_print(message);
-        @halt_system();
-   }
-
-    // Main entry point for initialization
-    proc K::kmain(K[BootInfo] info) -> K[Unit] {
-        // Early initialization
-        Tracing::tracer_early_init();
-
-        // Create kernel
-        let mut kernel: K[Kernel] = kernel_new();
-
-        // Initialize from boot
-        kernel = kernel_init(kernel, info);
-
-        // Run main loop (never returns on success)
-        kernel_run(kernel);
-    }
-
-    // Boot-time entry point
-    proc K::boot_entry() -> K[Unit] {
-        emit "XDV Kernel v0.3.0 booting...";
-
-        // Parse boot info (placeholder - should be passed from bootloader)
-        let boot_info: K[BootInfo] = @get_boot_info();
-
-        // Verify boot magic
-        if boot_info.magic != 0x2BADB002 {
-            emit "Invalid boot magic";
-            kernel_panic("No valid boot magic");
-        }
-
-        // Enter main kernel flow
-        kmain(boot_info);
-    }
-
-    // Helper: get cached boot info address
-    proc K::get_boot_info() -> K[BootInfo] {
-        @get_cached_boot_info()
-    }
-
-    // Helper: halt system
-    proc K::halt_system() -> K[Unit] {
-        @halt_cpu()
+    proc K::has_shutdown() -> K[bool] {
+        check_shutdown()
     }
 }
-
-// Main entry for K-regime
-craft K::boot_startup() {
-    KernelMain::boot_entry();
-}
-
